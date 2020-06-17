@@ -48,6 +48,7 @@ now WDF01000.SYS will import all kernel functions only from Emu_Extender
 3) Recalc checksum
 
 If need coexist with original WDF1.9 drivers:
+
 4) Rename WDF01000.SYS->WDF01_W8.SYS, WdfLdr.sys->WdfLdr8.sys
 5) In WDF01_W8.SYS replace string **WdfLdr.sys** to **WdfLdr8.sys** in import section
 6) In WdfLdr8.sys replace unicode string **\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d000** to **\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d_w8**
