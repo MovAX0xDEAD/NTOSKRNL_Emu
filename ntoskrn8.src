@@ -1,0 +1,13 @@
+NAME ntoskrn8.sys
+
+EXPORTS
+   DllInitialize	PRIVATE
+   DllUnload		PRIVATE
+
+#if defined(_X86_)
+//
+#endif
+
+#if defined(AMD64)
+//
+#endif
