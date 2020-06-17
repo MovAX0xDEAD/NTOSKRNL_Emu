@@ -45,15 +45,15 @@ Last version for Windows XP/2003 is 1.9, but possible to backport 1.11 version:
 
 2) In WDF01000.SYS replace string **ntoskrnl.exe** to **ntoskrn8.sys** in import section,
 now WDF01000.SYS will import all kernel functions only from Emu_Extender
-4) Recalc checksum
+3) Recalc checksum
 
 If need coexist with original WDF1.9 drivers:
-5)  Rename WDF01000.SYS->WDF01_W8.SYS, WdfLdr.sys->WdfLdr8.sys
-6)  In WDF01_W8.SYS replace string **WdfLdr.sys** to **WdfLdr8.sys** in import section
-7)  In WdfLdr8.sys replace unicode string **\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d000** to **\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d_w8**
-8)  In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6**
-9)  In ported driver xxx.sys replace string **WdfLdr.sys** to **WdfLdr8.sys** in import section
-10) In .INF of ported driver add creating new service:
+4) Rename WDF01000.SYS->WDF01_W8.SYS, WdfLdr.sys->WdfLdr8.sys
+5) In WDF01_W8.SYS replace string **WdfLdr.sys** to **WdfLdr8.sys** in import section
+6) In WdfLdr8.sys replace unicode string **\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d000** to **\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d_w8**
+7) In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6**
+8) In ported driver xxx.sys replace string **WdfLdr.sys** to **WdfLdr8.sys** in import section
+9) In .INF of ported driver add creating new service:
        AddService=WDF01_W8,,  WDF.AddService
 ....
        [WDF.AddService]
