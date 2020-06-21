@@ -8,6 +8,7 @@ Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work 
 1) Compile sources to make **ntoskrn8.sys**
 2) Make corrections to xxx.sys so that it loads **ntoskrn8.sys** instead of the original **ntoskrnl.exe**
 3) Place **ntoskrn8.sys** to **X:/Windows/sytem32/drivers/** folder
+4) Place storport.sys to **X:/Windows/sytem32/drivers/** folder (Windows 2003 version is OK, Windows 7 version is preffered)
 
 **Compiling:**
 1) Install Windows 7 DDK v7.1.0 (download from Microsoft site)
