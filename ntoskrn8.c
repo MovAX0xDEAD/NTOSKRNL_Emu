@@ -17,6 +17,9 @@
 /////////////////////////////////////////////////////////
 // early definition
 
+VOID
+StorportInitialize();
+
 NTSTATUS
 EtwRegister_k8 (
     LPCGUID             ProviderId,
@@ -95,7 +98,7 @@ typedef VOID IO_WORKITEM_ROUTINE_EX (
 typedef IO_WORKITEM_ROUTINE_EX *PIO_WORKITEM_ROUTINE_EX;
 
 typedef struct _WorkerRoutineArray {
-    PIO_WORKITEM_ROUTINE_EX  WorkerRoutine;
+    PIO_WORKITEM_ROUTINE_EX  WorkerRoutineEx;
     PIO_WORKITEM             IoWorkItem;
     PVOID                    Context;
 } WorkerRoutineArrayType;
@@ -153,7 +156,7 @@ Initialize (VOID)
 
     KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
     for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
-        WorkerRoutineArray[i].WorkerRoutine = NULL;
+        WorkerRoutineArray[i].WorkerRoutineEx = NULL;
         WorkerRoutineArray[i].IoWorkItem    = NULL;
         WorkerRoutineArray[i].Context       = NULL;
     }
@@ -182,6 +185,7 @@ DllInitialize(                // Main entry
      */
     
     Initialize();
+    StorportInitialize();
     return STATUS_SUCCESS;
 }
 
@@ -506,33 +510,51 @@ IoSetDevicePropertyData_k8 (
 }
 
 
-typedef struct _IO_WORKITEM {
-    WORK_QUEUE_ITEM         WorkItem;
-    PIO_WORKITEM_ROUTINE    Routine;
-    PDEVICE_OBJECT          DeviceObject;
-    PVOID                   Context;
-} IO_WORKITEM;
+#if (NTDDI_VERSION <= NTDDI_WS03SP4)            // Windows XP/2003
+    typedef struct _IO_WORKITEM {
+        WORK_QUEUE_ITEM         WorkItem;
+        PIO_WORKITEM_ROUTINE    Routine;
+        PDEVICE_OBJECT          DeviceObject;
+        PVOID                   Context;
+    } IO_WORKITEM;
+#else                                           //  Vista+
+    typedef struct _IO_WORKITEM {
+        WORK_QUEUE_ITEM         WorkItem;
+        PIO_WORKITEM_ROUTINE_EX Routine;
+        PVOID                   IoObject;
+        PVOID                   Context;
+        ULONG                   Type;
+        // struct _GUID ActivityId;             // Windows 8+
+    } IO_WORKITEM;
+#endif
+
 
 VOID
 IoQueueWorkItemCompatible (
     PDEVICE_OBJECT  DeviceObject,
     PVOID           Context )
 {
-    PIO_WORKITEM_ROUTINE_EX call;
     ULONG                   i;
     BOOLEAN                 foundContext = FALSE;
-    
+    PIO_WORKITEM            IoWorkItem;
+    KIRQL                   irql;
+    PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx;
+
+    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
     for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
-        if (WorkerRoutineArray[i].Context == Context) { // match by context
-            foundContext=TRUE;
-            break;
+        if (WorkerRoutineArray[i].IoWorkItem != NULL &&
+            WorkerRoutineArray[i].Context == Context ) {         // match by context
+                foundContext    = TRUE;
+                IoWorkItem      = WorkerRoutineArray[i].IoWorkItem;
+                WorkerRoutineEx = WorkerRoutineArray[i].WorkerRoutineEx;
+                WorkerRoutineArray[i].IoWorkItem = NULL;        // free entry
+                break;
         }
     }
-    
-    if (foundContext) {
-        call=WorkerRoutineArray[i].WorkerRoutine;
-        call(DeviceObject, Context, WorkerRoutineArray[i].IoWorkItem);
-    }
+    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql); 
+
+    if (foundContext)
+        WorkerRoutineEx(DeviceObject, Context, IoWorkItem);
     else {
         DbgPrint("IoQueueWork Context not found");
         KeBugCheckEx(0xDEADBEEF, 0x0, (ULONG_PTR)Context, (ULONG_PTR)DeviceObject,  0x0);
@@ -549,15 +571,15 @@ IoFreeWorkItem_k8 (
     ULONG   i;
     KIRQL   irql;
 
+    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
     for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
         if (WorkerRoutineArray[i].IoWorkItem == IoWorkItem) {
-            KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
-                WorkerRoutineArray[i].IoWorkItem = NULL;
-            KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
-            break;
+                WorkerRoutineArray[i].IoWorkItem = NULL;            // free entry
+                break;
         }
     }
-    
+    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);    
+
     IoFreeWorkItem(IoWorkItem);
 }
 
@@ -565,7 +587,7 @@ IoFreeWorkItem_k8 (
 VOID
 IoQueueWorkItemEx_k8 (
     PIO_WORKITEM            IoWorkItem,
-    PIO_WORKITEM_ROUTINE_EX WorkerRoutine,
+    PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx,
     WORK_QUEUE_TYPE         QueueType,
     PVOID                   Context )
 {
@@ -576,24 +598,22 @@ IoQueueWorkItemEx_k8 (
     KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
     for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
         if (WorkerRoutineArray[i].IoWorkItem == NULL) {
-            foundFreeEntry=TRUE;
+            foundFreeEntry = TRUE;
+            WorkerRoutineArray[i].WorkerRoutineEx = WorkerRoutineEx;
+            WorkerRoutineArray[i].IoWorkItem      = IoWorkItem;
+            WorkerRoutineArray[i].Context         = Context;
             break;
         }
     }
-    
+    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
+
     if (foundFreeEntry) {
-        WorkerRoutineArray[i].WorkerRoutine = WorkerRoutine;
-        WorkerRoutineArray[i].IoWorkItem    = IoWorkItem;
-        WorkerRoutineArray[i].Context       = Context;
-        KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
-        
         IoQueueWorkItem( IoWorkItem,
                          (PIO_WORKITEM_ROUTINE) IoQueueWorkItemCompatible,
                          QueueType,
                          Context);
     }
     else {
-        KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
         DbgPrint("WorkerRoutineArray overflow");
         KeBugCheckEx(0xDEADBEEF, 0x1, (ULONG_PTR)Context, (ULONG_PTR)IoWorkItem, 0x0);
     }
