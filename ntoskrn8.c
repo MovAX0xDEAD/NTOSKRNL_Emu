@@ -132,8 +132,9 @@ WorkerRoutineArrayType  WorkerRoutineArray [MAX_WorkerRoutineIndex];
 //pfULONG_ULONG             g_pExReleaseRundownProtectionEx = NULL;
 pVOID__VOID                 g_pKeRevertToUserAffinityThread = NULL;
 
-KSPIN_LOCK       g_SpinWorkerRoutineArray;
-KIRQL            g_OldIrql;
+ULONG           g_LastUsedArray_Entry;
+KSPIN_LOCK      g_SpinWorkerRoutineArray;
+KIRQL           g_OldIrql;
 
 // static writable
 //////////////////////////////////////////////////////////
@@ -146,19 +147,12 @@ Initialize (VOID)
     ULONG           i;
     KIRQL           irql;
 
-    //RtlInitUnicodeString(&funcName, L"ExAcquireRundownProtectionEx");
-    //g_pExAcquireRundownProtectionEx=(pfBOOLEAN__ULONG_ULONG)(ULONG_PTR)MmGetSystemRoutineAddress(&funcName);
-    
-    //RtlInitUnicodeString(&funcName, L"ExReleaseRundownProtectionEx");
-    //g_pExReleaseRundownProtectionEx=(pfULONG_ULONG)(ULONG_PTR)MmGetSystemRoutineAddress(&funcName);
-    
-    KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
+     KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
 
     KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
-    for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
-        WorkerRoutineArray[i].WorkerRoutineEx = NULL;
-        WorkerRoutineArray[i].IoWorkItem    = NULL;
-        WorkerRoutineArray[i].Context       = NULL;
+    {
+        g_LastUsedArray_Entry = 0;
+        RtlZeroMemory(WorkerRoutineArray, sizeof(WorkerRoutineArray));
     }
     KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
 }
@@ -541,13 +535,15 @@ IoQueueWorkItemCompatible (
     PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx;
 
     KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
-    for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
+    for (i = 0; i <= g_LastUsedArray_Entry; i++) {
         if (WorkerRoutineArray[i].IoWorkItem != NULL &&
             WorkerRoutineArray[i].Context == Context ) {         // match by context
                 foundContext    = TRUE;
                 IoWorkItem      = WorkerRoutineArray[i].IoWorkItem;
                 WorkerRoutineEx = WorkerRoutineArray[i].WorkerRoutineEx;
                 WorkerRoutineArray[i].IoWorkItem = NULL;        // free entry
+                if (g_LastUsedArray_Entry == i && i > 0)
+                        g_LastUsedArray_Entry--;
                 break;
         }
     }
@@ -565,17 +561,19 @@ IoQueueWorkItemCompatible (
 
 VOID
 IoFreeWorkItem_k8 (
-    PIO_WORKITEM IoWorkItem
-)
+    PIO_WORKITEM IoWorkItem )
 {
     ULONG   i;
     KIRQL   irql;
 
-    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
-    for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
-        if (WorkerRoutineArray[i].IoWorkItem == IoWorkItem) {
-                WorkerRoutineArray[i].IoWorkItem = NULL;            // free entry
-                break;
+    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql); {
+        for (i = 0; i <= g_LastUsedArray_Entry; i++) {
+            if (WorkerRoutineArray[i].IoWorkItem == IoWorkItem) {
+                    WorkerRoutineArray[i].IoWorkItem = NULL;            // free entry
+                    if (g_LastUsedArray_Entry == i && i > 0)
+                            g_LastUsedArray_Entry--;
+                    break;
+            }
         }
     }
     KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);    
@@ -595,14 +593,17 @@ IoQueueWorkItemEx_k8 (
     BOOLEAN  foundFreeEntry = FALSE;
     KIRQL    irql;
 
-    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
-    for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
-        if (WorkerRoutineArray[i].IoWorkItem == NULL) {
-            foundFreeEntry = TRUE;
-            WorkerRoutineArray[i].WorkerRoutineEx = WorkerRoutineEx;
-            WorkerRoutineArray[i].IoWorkItem      = IoWorkItem;
-            WorkerRoutineArray[i].Context         = Context;
-            break;
+    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql); {
+        for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
+            if (WorkerRoutineArray[i].IoWorkItem == NULL) {
+                foundFreeEntry = TRUE;
+                if (i > g_LastUsedArray_Entry)
+                            g_LastUsedArray_Entry = i;
+                WorkerRoutineArray[i].WorkerRoutineEx = WorkerRoutineEx;
+                WorkerRoutineArray[i].IoWorkItem      = IoWorkItem;
+                WorkerRoutineArray[i].Context         = Context;
+                break;
+            }
         }
     }
     KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
