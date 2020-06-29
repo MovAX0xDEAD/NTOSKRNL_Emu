@@ -78,6 +78,7 @@ Storport was released only for Windows 2003, but possible to backport Windows 7 
 now storport.sys will import all kernel functions only from Emu_Extender
 
 3) Storport uses MSI interrupts, need to force use only legacy/compatible interrupts
+
 replace hex pattern **8B 8E 3C 01 00** to **B9 00 00 00 90**
 
 4) Recalc checksum
@@ -137,10 +138,12 @@ now storahci.sys will import all storport functions only from Emu_Extender
 3) storahci.sys was compiled with Windows 8 DDK's storport.h and writes to new fields of _PORT_CONFIGURATION_INFORMATION,
 these fields not exist in Windows 7's storport.sys
 Need to skip these writes to avoid damaging structures in memory:
-       - replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
-       - replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
+
+       replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
+       replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
 
 If you compile storahci from sources (from Windows 8 DDK Samples), comment two lines:
+
        ConfigInfo->BusResetHoldTime = 0;
        ConfigInfo->FeatureSupport |= STOR_ADAPTER_FEATURE_STOP_UNIT_DURING_POWER_DOWN;
 
@@ -165,6 +168,7 @@ now these *.sys will import all kernel functions only from Emu_Extender
 for Windows XP/2003 x32 need to use compatible variant:
 
        replace hex pattern **FF 50 3C** to **FF 50 40**
+
 same in asm code:
 
        mov     eax, ds:HalDispatchTable
