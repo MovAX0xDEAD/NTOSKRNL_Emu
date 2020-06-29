@@ -1,5 +1,14 @@
 
-//  StorPortExtendedFunction
+//  StorPortRegistryRead  (6 * 4)
+#define _StorPortRegistryRead
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:StorPortRegistryRead=_StorPortRegistryRead_k8@24")
+#else
+ #pragma comment (linker, "/export:StorPortRegistryRead=StorPortRegistryRead_k8")
+#endif
+
+
+//  StorPortExtendedFunction (cdecl)
 #ifndef _AMD64_
  #pragma comment (linker, "/export:StorPortExtendedFunction=_StorPortExtendedFunction_k8")
 #else
@@ -7,7 +16,21 @@
 #endif
 
 
-// Default export list to Windows 7's storport.sys
+
+
+
+
+/////////////////////////////////////////
+///      redirect if ...               //
+/////////////////////////////////////////
+
+
+
+
+/////////////////////////////////////////
+///        default redirect            //
+/////////////////////////////////////////
+
 #pragma comment (linker, "/export:ScsiPortMoveMemory=storport.ScsiPortMoveMemory")
 #pragma comment (linker, "/export:ScsiPortNotification=storport.ScsiPortNotification")
 #pragma comment (linker, "/export:StorPortAllocateRegistryBuffer=storport.StorPortAllocateRegistryBuffer")
@@ -48,7 +71,7 @@
 #pragma comment (linker, "/export:StorPortReadRegisterUlong=storport.StorPortReadRegisterUlong")
 #pragma comment (linker, "/export:StorPortReadRegisterUshort=storport.StorPortReadRegisterUshort")
 #pragma comment (linker, "/export:StorPortReady=storport.StorPortReady")
-#pragma comment (linker, "/export:StorPortRegistryRead=storport.StorPortRegistryRead")
+//#pragma comment (linker, "/export:StorPortRegistryRead=storport.StorPortRegistryRead")
 #pragma comment (linker, "/export:StorPortRegistryWrite=storport.StorPortRegistryWrite")
 #pragma comment (linker, "/export:StorPortResume=storport.StorPortResume")
 #pragma comment (linker, "/export:StorPortResumeDevice=storport.StorPortResumeDevice")

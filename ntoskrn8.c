@@ -13,29 +13,13 @@
 #include <devpkey.h>
 
 #include "wrk2003.h"
+#include "common.h"
 
-/////////////////////////////////////////////////////////
-// early definition
 
-VOID
-StorportInitialize();
-
-NTSTATUS
-EtwRegister_k8 (
-    LPCGUID             ProviderId,
-    PETWENABLECALLBACK  EnableCallback,
-    PVOID               CallbackContext,
-    PREGHANDLE          RegHandle );
-
-void PrintNumaCpuConfiguration();
-
-// early definition
-//////////////////////////////////////////////////////////
-
-typedef VOID                (*pVOID__VOID)            (VOID);
-typedef VOID                (*pVOID__ULONG)           (ULONG);
-typedef VOID                (*pVOID__ULONG_ULONG)     (ULONG,ULONG);
-typedef VOID    (__stdcall  *pfVOID__ULONG_ULONG)     (ULONG,ULONG);
+typedef void                (*pVOID__VOID)            (void);
+typedef void                (*pVOID__ULONG)           (ULONG);
+typedef void                (*pVOID__ULONG_ULONG)     (ULONG,ULONG);
+typedef void    (__stdcall  *pfVOID__ULONG_ULONG)     (ULONG,ULONG);
 typedef BOOLEAN (__stdcall  *pfBOOLEAN__ULONG_ULONG)  (ULONG,ULONG);
 
 typedef struct    _PORT_MESSAGE {
@@ -90,7 +74,7 @@ typedef struct _ALPC_PORT_ATTRIBUTES {
 #endif
 } ALPC_PORT_ATTRIBUTES, *PALPC_PORT_ATTRIBUTES; 
 
-typedef VOID IO_WORKITEM_ROUTINE_EX (
+typedef void IO_WORKITEM_ROUTINE_EX (
     PVOID           IoObject,
     PVOID           Context,
     PIO_WORKITEM    IoWorkItem
@@ -134,27 +118,27 @@ pVOID__VOID                 g_pKeRevertToUserAffinityThread = NULL;
 
 ULONG           g_LastUsedArray_Entry;
 KSPIN_LOCK      g_SpinWorkerRoutineArray;
-KIRQL           g_OldIrql;
+KIRQL           g_GuardedRegion_OldIrql;
+LONG            g_GuardedRegionCounter;
 
 // static writable
 //////////////////////////////////////////////////////////
 
 
-VOID
-Initialize (VOID)
+void
+Initialize (void)
 {
-    UNICODE_STRING  funcName;
-    ULONG           i;
-    KIRQL           irql;
+    KLOCK_QUEUE_HANDLE  LockHandle;
 
-     KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
-
-    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
+    KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
+    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
     {
         g_LastUsedArray_Entry = 0;
         RtlZeroMemory(WorkerRoutineArray, sizeof(WorkerRoutineArray));
+        g_GuardedRegionCounter = 0;
     }
-    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
+    KeReleaseInStackQueuedSpinLock(&LockHandle);
+
 }
 
 
@@ -185,14 +169,14 @@ DllInitialize(                // Main entry
 
 
 NTSTATUS
-DllUnload (VOID)
+DllUnload (void)
 {
     return STATUS_SUCCESS;
 }
 
 
-VOID
-KeFlushQueuedDpcs_k8 (VOID)    // WinXP RTM, SP1
+void
+KeFlushQueuedDpcs_k8 (void)    // WinXP RTM, SP1
 {
     /* TODO: find KeRevertToUserAffinityThread in ntoskrnl, g_pKeRevertToUserAffinityThread=
     
@@ -240,13 +224,12 @@ PoDisableSleepStates_k8 (ULONG a, ULONG b, ULONG c)        // undocumented
 NTSTATUS
 RtlCheckPortableOperatingSystem_k8 (PBOOLEAN IsPortable)    // RE win8_ntoskrnl
 {
-    
-    if (RtlCheckRegistryKey(RTL_REGISTRY_CONTROL, L"MiniNT") == 0) { // SUCCESS
+    if (RtlCheckRegistryKey(RTL_REGISTRY_CONTROL, L"MiniNT") == STATUS_SUCCESS)
         *IsPortable=TRUE;
-        return STATUS_SUCCESS;
-    }
+    else   
+        *IsPortable=FALSE;
     
-    return STATUS_NOT_FOUND;
+    return STATUS_SUCCESS;
 }
 
 
@@ -342,6 +325,7 @@ EtwActivityIdControl_k8 (
             RtlCopyMemory(  ActivityId,
                             &DUMMYGUID,
                             sizeof(GUID));
+            break;
         case EVENT_ACTIVITY_CTRL_SET_ID:
         case EVENT_ACTIVITY_CTRL_CREATE_SET_ID:
         default:
@@ -461,7 +445,7 @@ wcsncpy_s_k8 (                               // Wine
 
 
 BOOLEAN
-KdRefreshDebuggerNotPresent_k8 (VOID)
+KdRefreshDebuggerNotPresent_k8 (void)
  {
     return KD_DEBUGGER_NOT_PRESENT;
  }
@@ -499,31 +483,11 @@ IoSetDevicePropertyData_k8 (
     ULONG              Size,
     PVOID              Data )
 {
-
     return STATUS_SUCCESS;
 }
 
 
-#if (NTDDI_VERSION <= NTDDI_WS03SP4)            // Windows XP/2003
-    typedef struct _IO_WORKITEM {
-        WORK_QUEUE_ITEM         WorkItem;
-        PIO_WORKITEM_ROUTINE    Routine;
-        PDEVICE_OBJECT          DeviceObject;
-        PVOID                   Context;
-    } IO_WORKITEM;
-#else                                           //  Vista+
-    typedef struct _IO_WORKITEM {
-        WORK_QUEUE_ITEM         WorkItem;
-        PIO_WORKITEM_ROUTINE_EX Routine;
-        PVOID                   IoObject;
-        PVOID                   Context;
-        ULONG                   Type;
-        // struct _GUID ActivityId;             // Windows 8+
-    } IO_WORKITEM;
-#endif
-
-
-VOID
+void
 IoQueueWorkItemCompatible (
     PDEVICE_OBJECT  DeviceObject,
     PVOID           Context )
@@ -531,23 +495,25 @@ IoQueueWorkItemCompatible (
     ULONG                   i;
     BOOLEAN                 foundContext = FALSE;
     PIO_WORKITEM            IoWorkItem;
-    KIRQL                   irql;
+    KLOCK_QUEUE_HANDLE      LockHandle;
     PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx;
 
-    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql);
-    for (i = 0; i <= g_LastUsedArray_Entry; i++) {
-        if (WorkerRoutineArray[i].IoWorkItem != NULL &&
-            WorkerRoutineArray[i].Context == Context ) {         // match by context
-                foundContext    = TRUE;
-                IoWorkItem      = WorkerRoutineArray[i].IoWorkItem;
-                WorkerRoutineEx = WorkerRoutineArray[i].WorkerRoutineEx;
-                WorkerRoutineArray[i].IoWorkItem = NULL;        // free entry
-                if (g_LastUsedArray_Entry == i && i > 0)
-                        g_LastUsedArray_Entry--;
-                break;
+    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
+    {
+        for (i = 0; i <= g_LastUsedArray_Entry; i++) {
+            if (WorkerRoutineArray[i].IoWorkItem != NULL &&
+                WorkerRoutineArray[i].Context == Context ) {         // match by context
+                    foundContext    = TRUE;
+                    IoWorkItem      = WorkerRoutineArray[i].IoWorkItem;
+                    WorkerRoutineEx = WorkerRoutineArray[i].WorkerRoutineEx;
+                    WorkerRoutineArray[i].IoWorkItem = NULL;        // free entry
+                    if (g_LastUsedArray_Entry == i && i > 0)
+                            g_LastUsedArray_Entry--;
+                    break;
+            }
         }
-    }
-    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql); 
+    }    
+    KeReleaseInStackQueuedSpinLock(&LockHandle); 
 
     if (foundContext)
         WorkerRoutineEx(DeviceObject, Context, IoWorkItem);
@@ -559,14 +525,15 @@ IoQueueWorkItemCompatible (
 }
 
 
-VOID
+void
 IoFreeWorkItem_k8 (
     PIO_WORKITEM IoWorkItem )
 {
-    ULONG   i;
-    KIRQL   irql;
+    ULONG               i;
+    KLOCK_QUEUE_HANDLE  LockHandle;
 
-    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql); {
+    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
+    {
         for (i = 0; i <= g_LastUsedArray_Entry; i++) {
             if (WorkerRoutineArray[i].IoWorkItem == IoWorkItem) {
                     WorkerRoutineArray[i].IoWorkItem = NULL;            // free entry
@@ -576,24 +543,25 @@ IoFreeWorkItem_k8 (
             }
         }
     }
-    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);    
+    KeReleaseInStackQueuedSpinLock(&LockHandle);    
 
     IoFreeWorkItem(IoWorkItem);
 }
 
 
-VOID
+void
 IoQueueWorkItemEx_k8 (
     PIO_WORKITEM            IoWorkItem,
     PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx,
     WORK_QUEUE_TYPE         QueueType,
     PVOID                   Context )
 {
-    ULONG    i;
-    BOOLEAN  foundFreeEntry = FALSE;
-    KIRQL    irql;
+    ULONG               i;
+    BOOLEAN             foundFreeEntry = FALSE;
+    KLOCK_QUEUE_HANDLE  LockHandle;
 
-    KeAcquireSpinLock(&g_SpinWorkerRoutineArray, &irql); {
+    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
+    {
         for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
             if (WorkerRoutineArray[i].IoWorkItem == NULL) {
                 foundFreeEntry = TRUE;
@@ -606,7 +574,7 @@ IoQueueWorkItemEx_k8 (
             }
         }
     }
-    KeReleaseSpinLock(&g_SpinWorkerRoutineArray, irql);
+    KeReleaseInStackQueuedSpinLock(&LockHandle);
 
     if (foundFreeEntry) {
         IoQueueWorkItem( IoWorkItem,
@@ -623,13 +591,13 @@ IoQueueWorkItemEx_k8 (
 
 
 ULONG
-IoSizeofWorkItem_k8 (VOID)
+IoSizeofWorkItem_k8 (void)
 {
     return sizeof(IO_WORKITEM);
 }
  
  
-VOID
+void
 IoInitializeWorkItem_k8 (
    PVOID        IoObject,
    PIO_WORKITEM IoWorkItem )
@@ -640,7 +608,7 @@ IoInitializeWorkItem_k8 (
 }
 
 
-VOID
+void
 IoUninitializeWorkItem_k8 (
     PIO_WORKITEM IoWorkItem )
 {
@@ -733,7 +701,7 @@ KeGetCurrentProcessorNumberEx_k8 (              // RE procgrp.lib
 
 
 ULONG
-KeQueryMaximumProcessorCount_k8 (VOID)          // RE procgrp.lib
+KeQueryMaximumProcessorCount_k8 (void)          // RE procgrp.lib
 {
     return KeNumberProcessors;
 }
@@ -751,14 +719,14 @@ KeQueryMaximumProcessorCountEx_k8 (             // RE procgrp.lib
 
 
 USHORT
-KeQueryActiveGroupCount_k8 (VOID)
+KeQueryActiveGroupCount_k8 (void)
 {
     return 1;  // active groups = 1 
 }
 
 
 USHORT
-KeQueryMaximumGroupCount_k8 (VOID)
+KeQueryMaximumGroupCount_k8 (void)
 {
     return 1;  // total groups = 1 
 }
@@ -773,7 +741,7 @@ KeSetSystemAffinityThreadEx_k8 (                // RE procgrp.lib
 }
 
 
-VOID
+void
 KeSetSystemGroupAffinityThread_k8 (             // RE procgrp.lib
     PGROUP_AFFINITY Affinity,
     PGROUP_AFFINITY PreviousAffinity )
@@ -801,7 +769,7 @@ KeSetSystemGroupAffinityThread_k8 (             // RE procgrp.lib
 }
 
 
-VOID
+void
 KeRevertToUserAffinityThreadEx_k8 (             // RE procgrp.lib
     KAFFINITY Affinity )
 {
@@ -810,7 +778,7 @@ KeRevertToUserAffinityThreadEx_k8 (             // RE procgrp.lib
 }
 
 
-VOID
+void
 KeRevertToUserGroupAffinityThread_k8 (          // RE procgrp.lib
     PGROUP_AFFINITY PreviousAffinity )
 {
@@ -844,20 +812,20 @@ KeSetTargetProcessorDpcEx_k8 (                  // RE procgrp.lib
 
 
 USHORT
-KeGetCurrentNodeNumber_k8 (VOID)
+KeGetCurrentNodeNumber_k8 (void)
 {
     return 0; // current node = 0
 }
 
 
 USHORT
-KeQueryHighestNodeNumber_k8 (VOID)
+KeQueryHighestNodeNumber_k8 (void)
 {
     return 0; // total nodes = 0
 }
 
 
-VOID
+void
 KeQueryNodeActiveAffinity_k8 (
     USHORT          NodeNumber,
     PGROUP_AFFINITY Affinity,
@@ -1035,7 +1003,6 @@ KeQueryLogicalProcessorRelationship_k8 (
     ULONG       Status;
     ULONG       i;
     ULONG       ProcessorCore;
-    UCHAR       *pInformation;
     PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX  NewEntry;
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION     *CurrentInfo;
     KAFFINITY   Mask;
@@ -1309,7 +1276,7 @@ KeQueryLogicalProcessorRelationship_k8 (
 
 #include <ntstrsafe.h>
 
-VOID
+void
 TraceGUMessage(
     IN PCCHAR  func,
     IN PCCHAR  file,
@@ -1504,7 +1471,7 @@ IoConnectInterruptEx_k8 (                       // RE iointex.lib
 }
 
 
-VOID
+void
 IoDisconnectInterruptEx_k8 (                    // RE iointex.lib
     PIO_DISCONNECT_INTERRUPT_PARAMETERS Parameters )
 {
@@ -1522,7 +1489,7 @@ PoGetSystemWake_k8 (
 }
 
 
-VOID
+void
 PoSetSystemWake_k8 (
     PIRP  Irp )
 {
@@ -1633,7 +1600,7 @@ MmAllocateContiguousNodeMemory_k8 (
 }
 
 
-VOID FASTCALL
+void FASTCALL
 KeInitializeGuardedMutex_k8 (
     PKGUARDED_MUTEX Mutex )
 {    
@@ -1665,7 +1632,7 @@ KeInitializeGuardedMutex_k8 (
 }
 
 
-VOID FASTCALL
+void FASTCALL
 KeAcquireGuardedMutex_k8 (
   PKGUARDED_MUTEX  Mutex )
 {
@@ -1681,7 +1648,7 @@ KeTryToAcquireGuardedMutex_k8 (
 }
 
 
-VOID FASTCALL
+void FASTCALL
 KeReleaseGuardedMutex_k8 (
     PKGUARDED_MUTEX Mutex )
 {
@@ -1689,7 +1656,7 @@ KeReleaseGuardedMutex_k8 (
 }
 
 
-VOID FASTCALL
+void FASTCALL
 KeAcquireGuardedMutexUnsafe_k8 (
     PKGUARDED_MUTEX FastMutex )
 {
@@ -1697,7 +1664,7 @@ KeAcquireGuardedMutexUnsafe_k8 (
 }
 
 
-VOID FASTCALL
+void FASTCALL
 KeReleaseGuardedMutexUnsafe_k8 (
     PKGUARDED_MUTEX FastMutex )
 {
@@ -1706,30 +1673,39 @@ KeReleaseGuardedMutexUnsafe_k8 (
 
 
 // TODO trace OldIrql depend on caller
-VOID
-KeEnterGuardedRegion_k8 (VOID)
+void
+KeEnterGuardedRegion_k8 (void)
 {
+    if (g_GuardedRegionCounter < 1)
+        KeRaiseIrql(APC_LEVEL, &g_GuardedRegion_OldIrql);
+
     KeEnterCriticalRegion();
-    KeRaiseIrql(APC_LEVEL, &g_OldIrql);
+    InterlockedIncrement(&g_GuardedRegionCounter);
 }
 
 
-VOID
-KeLeaveGuardedRegion_k8 (VOID)
+void
+KeLeaveGuardedRegion_k8 (void)
 {
     KeLeaveCriticalRegion();
-    KeLowerIrql(g_OldIrql);
+    InterlockedDecrement(&g_GuardedRegionCounter);
+
+    if (g_GuardedRegionCounter < 1)
+        KeLowerIrql(g_GuardedRegion_OldIrql);
+
+    if (g_GuardedRegionCounter < 0)
+        InterlockedExchange(&g_GuardedRegionCounter, 0);    
 }
 
 
 NTSTATUS
-DummyProc (VOID)
+DummyProc (void)
 {
     return STATUS_SUCCESS;
 }
 
 
-VOID
+void
 PoStartDeviceBusy_k8 (
     PULONG IdlePointer )
 {
@@ -1737,7 +1713,7 @@ PoStartDeviceBusy_k8 (
 }
 
 
-VOID
+void
 PoEndDeviceBusy_k8 (
     PULONG IdlePointer )
 
@@ -1747,7 +1723,7 @@ PoEndDeviceBusy_k8 (
 
 
 // mark some routines for dynamic availablity
-RoutineAddressType const RoutineAddressEnabled[] = {    
+const RoutineAddressType RoutineAddressEnabled[] = {    
     { RTL_CONSTANT_STRING(L"IoConnectInterruptEx"),     &IoConnectInterruptEx_k8    }, // wdf01000.sys 1.11.9200
     { RTL_CONSTANT_STRING(L"IoDisconnectInterruptEx"),  &IoDisconnectInterruptEx_k8 }, // wdf01000.sys 1.11.9200
 };
@@ -1835,7 +1811,7 @@ PcwRegister_k8 (
 }
 
 
-VOID
+void
 PcwUnregister_k8 (
     PPCW_REGISTRATION Registration )
 {
@@ -1845,7 +1821,7 @@ PcwUnregister_k8 (
 
 NTSTATUS
 PcwCreateInstance_k8 (
-     PPCW_INSTANCE      *Instance,
+     PPCW_INSTANCE     *Instance,
      PPCW_REGISTRATION  Registration,
      PCUNICODE_STRING   Name,
      ULONG              Count,
@@ -1855,7 +1831,7 @@ PcwCreateInstance_k8 (
 }
 
 
-VOID
+void
 PcwCloseInstance_k8 (
     PPCW_INSTANCE Instance )
 {
@@ -1870,6 +1846,95 @@ PcwAddInstance_k8 (
     ULONG              Id,
     ULONG              Count,
     PPCW_DATA          Data )
+{
+    return STATUS_SUCCESS;
+}
+
+
+BOOLEAN
+KeSetCoalescableTimer_k8 (
+    KTIMER         *Timer,
+    LARGE_INTEGER   DueTime,
+    ULONG           Period,
+    ULONG           TolerableDelay,
+    KDPC           *Dpc)
+{
+   return KeSetTimerEx(
+            Timer,
+            DueTime,
+            Period,
+            Dpc );     
+}
+
+
+NTSTATUS
+IoUnregisterPlugPlayNotificationEx_k8(
+    PVOID NotificationEntry )
+{
+    return IoUnregisterPlugPlayNotification(NotificationEntry);
+}
+
+
+
+NTSTATUS
+EmClientQueryRuleState_k8 (
+    LPCGUID RuleId,
+    PEM_RULE_STATE State )
+{   
+    *State = STATE_UNKNOWN;
+    return STATUS_SUCCESS;
+}
+
+
+VOID
+PoSetDeviceBusyEx_k8 (
+    PULONG IdlePointer )
+{
+    PoSetDeviceBusy(IdlePointer);
+}
+
+
+IO_PRIORITY_HINT
+IoGetIoPriorityHint_k8 (
+    PIRP Irp )
+{
+    return IoPriorityNormal;
+}
+
+
+NTSTATUS
+IoAllocateSfioStreamIdentifier_k8 (
+     PFILE_OBJECT  FileObject,
+     ULONG         Length,
+     PVOID         Signature,
+     PVOID         *StreamIdentifier )
+{
+    // PVOID   *Buffer;
+    // Buffer    = ExAllocatePoolWithTag(NonPagedPool, Length + 4*sizeof(ULONG_PTR), 'tSoI');
+    // Buffer[0] = NULL;
+    // Buffer[1] = NULL;
+    // Buffer[2] = &Buffer[4];
+    // Buffer[3] = Signature;
+    // *StreamIdentifier = &Buffer[4];
+    // return STATUS_SUCCESS;
+    
+    return STATUS_UNSUCCESSFUL;
+}
+
+
+PVOID
+IoGetSfioStreamIdentifier_k8 (
+     PFILE_OBJECT   FileObject,
+     PVOID          Signature )
+{
+    return NULL;
+}
+
+
+NTSTATUS
+IoFreeSfioStreamIdentifier_k8 (
+    PFILE_OBJECT   FileObject,
+    PVOID          Signature )
 {
     return STATUS_SUCCESS;
 }

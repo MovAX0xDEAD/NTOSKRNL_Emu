@@ -92,9 +92,9 @@ Windows 7's NVMe driver for Windows XP x32
 2) MS Win7 NVMe driver require Win7 Storport.sys, use backported one
 
 
+
 Windows 8's USB3 driver for Windows XP x32
 ---------------------------
-
 1) Get required files from Windows 8:
 
        ucx01000.sys
@@ -103,11 +103,9 @@ Windows 8's USB3 driver for Windows XP x32
        wpprecorder.sys
        usbd.sys
 
-
 from Vista Beta/Longhorn 5456.5:
 
        ksecdd.sys
-
 
 2) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, wpprecorder.sys, usbd.sys change **security_cookie** to random value
 3) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, ksecdd.sys replace string name "ntoskrnl.exe" to "ntoskrn8.sys' in import section,
@@ -116,4 +114,66 @@ now *.sys will import kernel functions only from Emu_Extender
 5) In usbhub3.sys replace string name "ksecdd.sys" to "ksecd8.sys' in import section
 6) In usbhub3.sys replace string name "usbd.sys" to "usbd_w8.sys' in import section,
 7) recalc checksum
+
+
+Windows 8's STORAHCI driver for Windows XP x32
+---------------------------
+STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys from Windows 7.
+storport.sys from Windows 7 more compatible with Windows Xp/2003 because it still call required PoStartNextPowerIrp
+when processing power IRPs. MS removed calls to PoStartNextPowerIrp in Windows 8's storport.sys, without this call
+Windows XP/2003 kernel cannot finish current power IRP and start next IRP, also it generate BSOD (0x0000009F)
+
+Take attention:
+Win8's STORAHCI + Win7's STORPORT have **significal performance drop and high CPU usage**, there is no fix yet
+
+1) Get files from Windows 8 ():
+
+       storahci.sys	v 6.2.9200.16384
+
+2) In storahci.sys replace string **storport.sys** to **ntoskrn8.sys** in import section,
+now storahci.sys will import all storport functions only from Emu_Extender
+
+
+3) storahci.sys was compiled with Windows 8 DDK's storport.h and writes to new fields of _PORT_CONFIGURATION_INFORMATION,
+these fields not exist in Windows 7's storport.sys
+Need to skip these writes to avoid damaging structures in memory:
+       - replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
+       - replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
+
+If you compile storahci from sources (from Windows 8 DDK Samples), comment two lines:
+       ConfigInfo->BusResetHoldTime = 0;
+       ConfigInfo->FeatureSupport |= STOR_ADAPTER_FEATURE_STOP_UNIT_DURING_POWER_DOWN;
+
+4) In storahci.sys change **security_cookie** to random value
+
+5) Recalc checksum
+
+
+Windows 7's MSAHCI driver for Windows XP x32
+---------------------------
+1) Get files from Windows 7 Updates(KB3125574):
+
+       atapi.sys	v 6.1.7600.23403
+       ataport.sys	v 6.1.7600.23403
+       msahci.sys	v 6.1.7600.23403
+       pciidex.sys	v 6.1.7600.23403
+
+2) In ataport.sys, pciidex.sys replace string **ntoskrnl.exe** to **ntoskrn8.sys** in import section,
+now these *.sys will import all kernel functions only from Emu_Extender
+
+3) pciidex.sys uses MS Internal/Undocumented HalDispatchTable way to call functions from Kernel/HAL,
+for Windows XP/2003 x32 need to use compatible variant:
+
+       replace hex pattern **FF 50 3C** to **FF 50 40**
+same in asm code:
+
+       mov     eax, ds:HalDispatchTable
+       ...
+       call    dword ptr [eax+3Ch] => call    dword ptr [eax+40h]
+
+4) Recalc checksum
+
+5) MSHDC.INF from Windows 7 may conflict with original mshdc.inf from Windows XP/2003
+For example msahci enumerates IDE/SATA channels as **Internal_IDE_Channel** and compatible ID as ***PNP0600**.
+Original mshdc.inf for ***PNP0600** will install wrong **"Standard IDE/ESDI Hard Disk Controller"** driver
 

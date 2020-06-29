@@ -527,6 +527,59 @@
 #endif
 
 
+//	 EmClientQueryRuleState  (2 * 4)
+#define _EmClientQueryRuleState
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:EmClientQueryRuleState=_EmClientQueryRuleState_k8@8")
+#else
+ #pragma comment (linker, "/export:EmClientQueryRuleState=EmClientQueryRuleState_k8")
+#endif
+
+
+//	 PoSetDeviceBusyEx  (1 * 4)
+#define _PoSetDeviceBusyEx
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:PoSetDeviceBusyEx=_PoSetDeviceBusyEx_k8@4")
+#else
+ #pragma comment (linker, "/export:PoSetDeviceBusyEx=PoSetDeviceBusyEx_k8")
+#endif
+
+
+//	 IoGetIoPriorityHint  (1 * 4)
+#define _IoGetIoPriorityHint
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:IoGetIoPriorityHint=_IoGetIoPriorityHint_k8@4")
+#else
+ #pragma comment (linker, "/export:IoGetIoPriorityHint=IoGetIoPriorityHint_k8")
+#endif
+
+
+//	 IoAllocateSfioStreamIdentifier  (4 * 4)
+#define _IoAllocateSfioStreamIdentifier
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:IoAllocateSfioStreamIdentifier=_IoAllocateSfioStreamIdentifier_k8@16")
+#else
+ #pragma comment (linker, "/export:IoAllocateSfioStreamIdentifier=IoAllocateSfioStreamIdentifier_k8")
+#endif
+
+
+//	 IoGetSfioStreamIdentifier  (2 * 4)
+#define _IoGetSfioStreamIdentifier
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:IoGetSfioStreamIdentifier=_IoGetSfioStreamIdentifier_k8@8")
+#else
+ #pragma comment (linker, "/export:IoGetSfioStreamIdentifier=IoGetSfioStreamIdentifier_k8")
+#endif
+
+
+//	 IoFreeSfioStreamIdentifier  (2 * 4)
+#define _IoFreeSfioStreamIdentifier
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:IoFreeSfioStreamIdentifier=_IoFreeSfioStreamIdentifier_k8@8")
+#else
+ #pragma comment (linker, "/export:IoFreeSfioStreamIdentifier=IoFreeSfioStreamIdentifier_k8")
+#endif
+
 
 
 
@@ -809,6 +862,22 @@
 #endif
 
 
+//	 KeSetCoalescableTimer   (6 * 4)
+#define _KeSetCoalescableTimer
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:KeSetCoalescableTimer=_KeSetCoalescableTimer_k8@24")
+#else
+ #pragma comment (linker, "/export:KeSetCoalescableTimer=KeSetCoalescableTimer_k8")
+#endif
+
+
+//	 IoUnregisterPlugPlayNotificationEx   (1 * 4)
+#define _IoUnregisterPlugPlayNotificationEx
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:IoUnregisterPlugPlayNotificationEx=_IoUnregisterPlugPlayNotificationEx_k8@4")
+#else
+ #pragma comment (linker, "/export:IoUnregisterPlugPlayNotificationEx=IoUnregisterPlugPlayNotificationEx_k8")
+#endif
 
 
 #endif
@@ -1092,7 +1161,7 @@
 #ifndef _KeQueryHighestNodeNumber
  #pragma comment (linker, "/export:KeQueryHighestNodeNumber=ntoskrnl.KeQueryHighestNodeNumber")
 #endif
- #ifndef _KeQueryNodeActiveAffinity
+#ifndef _KeQueryNodeActiveAffinity
  #pragma comment (linker, "/export:KeQueryNodeActiveAffinity=ntoskrnl.KeQueryNodeActiveAffinity")
 #endif
 #ifndef _KeQueryGroupAffinity
@@ -1161,6 +1230,32 @@
 #ifndef _MmAllocateContiguousNodeMemory
  #pragma comment (linker, "/export:MmAllocateContiguousNodeMemory=ntoskrnl.MmAllocateContiguousNodeMemory")
 #endif
+#ifndef _KeSetCoalescableTimer
+ #pragma comment (linker, "/export:KeSetCoalescableTimer=ntoskrnl.KeSetCoalescableTimer")
+#endif
+#ifndef _IoUnregisterPlugPlayNotificationEx
+ #pragma comment (linker, "/export:IoUnregisterPlugPlayNotificationEx=ntoskrnl.IoUnregisterPlugPlayNotificationEx")
+#endif
+#ifndef _EmClientQueryRuleState
+ #pragma comment (linker, "/export:EmClientQueryRuleState=ntoskrnl.EmClientQueryRuleState")
+#endif
+#ifndef _PoSetDeviceBusyEx
+ #pragma comment (linker, "/export:PoSetDeviceBusyEx=ntoskrnl.PoSetDeviceBusyEx")
+#endif
+#ifndef _IoGetIoPriorityHint
+ #pragma comment (linker, "/export:IoGetIoPriorityHint=ntoskrnl.IoGetIoPriorityHint")
+#endif
+#ifndef _IoAllocateSfioStreamIdentifier
+ #pragma comment (linker, "/export:IoAllocateSfioStreamIdentifier=ntoskrnl.IoAllocateSfioStreamIdentifier")
+#endif
+#ifndef _IoGetSfioStreamIdentifier
+ #pragma comment (linker, "/export:IoGetSfioStreamIdentifier=ntoskrnl.IoGetSfioStreamIdentifier")
+#endif
+#ifndef _IoFreeSfioStreamIdentifier
+ #pragma comment (linker, "/export:IoFreeSfioStreamIdentifier=ntoskrnl.IoFreeSfioStreamIdentifier")
+#endif
+
+	
 
 
 
