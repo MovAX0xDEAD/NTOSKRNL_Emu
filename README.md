@@ -21,14 +21,16 @@ Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work 
 Keep in mind that depending on the target operating system the way of exporting the functions changes,
 if a function already exists in the kernel it will be simply redirected without injecting emulation code
 
-4) Run shell Start Menu\Programs\Windows Driver Kits\Win7 7600.16385.1\Build Environments\Windows XXX\x86 Free Build Environment
+4)If Target OS is Windows XP, inside installed DDK directory replace **lib\wxp\i386\storport.lib** with **lib\wnet\i386\storport.lib**
+
+5) Run shell Start Menu\Programs\Windows Driver Kits\Win7 7600.16385.1\Build Environments\Windows XXX\x86 Free Build Environment
 **XXX** - target OS
 
-5) In shell change current directory to local project folder
+6) In shell change current directory to local project folder
 
-6) Use shell command BLD to compile project
+7) Use shell command BLD to compile project
 
-7) Compiled ntoskrn8.sys will be in **objfre_XXX_x86/i386** folder
+8) Compiled ntoskrn8.sys will be in **objfre_XXX_x86/i386** folder
 
 
 
