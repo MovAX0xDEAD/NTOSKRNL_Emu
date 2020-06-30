@@ -1807,6 +1807,7 @@ PcwRegister_k8 (
      PPCW_REGISTRATION              *Registration,
      PPCW_REGISTRATION_INFORMATION  Info )
 {
+    *Registration = NULL;
     return STATUS_SUCCESS;
 }
 
@@ -1827,6 +1828,7 @@ PcwCreateInstance_k8 (
      ULONG              Count,
      PPCW_DATA          Data )
 {
+    *Instance = NULL;
     return STATUS_SUCCESS;
 }
 

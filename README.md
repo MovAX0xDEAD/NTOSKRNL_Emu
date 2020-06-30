@@ -56,8 +56,9 @@ If need coexist with original WDF1.9 drivers:
 7) In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6**
 8) In ported driver xxx.sys replace string **WdfLdr.sys** to **WdfLdr8.sys** in import section
 9) In .INF of ported driver add creating new service:
+
        AddService=WDF01_W8,,  WDF.AddService
-....
+       ....
        [WDF.AddService]
        DisplayName    = "Windows Driver Framework v1.11 for XP/2003"
        ServiceType    = 1                  ; SERVICE_KERNEL_DRIVER
@@ -119,7 +120,8 @@ now *.sys will import kernel functions only from Emu_Extender
 
 Windows 8's STORAHCI driver for Windows XP x32
 ---------------------------
-STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys from Windows 7.
+STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys from Windows 7
+
 storport.sys from Windows 7 more compatible with Windows Xp/2003 because it still call required PoStartNextPowerIrp
 when processing power IRPs. MS removed calls to PoStartNextPowerIrp in Windows 8's storport.sys, without this call
 Windows XP/2003 kernel cannot finish current power IRP and start next IRP, also it generate BSOD (0x0000009F)
@@ -137,10 +139,10 @@ now storahci.sys will import all storport functions only from Emu_Extender
 
 3) storahci.sys was compiled with Windows 8 DDK's storport.h and writes to new fields of _PORT_CONFIGURATION_INFORMATION,
 these fields not exist in Windows 7's storport.sys
-Need to skip these writes to avoid damaging structures in memory:
 
-       replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
-       replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
+Need to skip these writes to avoid damaging structures in memory:
+replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
+replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
 
 If you compile storahci from sources (from Windows 8 DDK Samples), comment two lines:
 
@@ -165,9 +167,9 @@ Windows 7's MSAHCI driver for Windows XP x32
 now these *.sys will import all kernel functions only from Emu_Extender
 
 3) pciidex.sys uses MS Internal/Undocumented HalDispatchTable way to call functions from Kernel/HAL,
-for Windows XP/2003 x32 need to use compatible variant:
 
-       replace hex pattern **FF 50 3C** to **FF 50 40**
+For Windows XP/2003 x32 need to use compatible variant:
+replace hex pattern **FF 50 3C** to **FF 50 40**
 
 same in asm code:
 
