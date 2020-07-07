@@ -1,10 +1,113 @@
+#undef    __STDC_WANT_SECURE_LIB__
+#define   __STDC_WANT_SECURE_LIB__ 0
+
+
 //#define STORPORT_W8
 
-#include <stddef.h>
 #include <ntddk.h> 
-#include <wdm.h>        // ntddk + wdm
-//#include <storport.h>
 #include "common.h"
+#include "wrk2003.h"
+
+typedef enum _STORPORT_FUNCTION_CODE_W10 {
+    ///////////////////////////////////////////
+    //      Windows 2003
+    ExtFunctionAllocatePool,
+    ExtFunctionFreePool,
+    ExtFunctionAllocateMdl,
+    ExtFunctionFreeMdl,
+    ExtFunctionBuildMdlForNonPagedPool,
+    ExtFunctionGetSystemAddress,
+    ExtFunctionGetOriginalMdl,
+    ExtFunctionCompleteServiceIrp,
+    ExtFunctionGetDeviceObjects,
+    ExtFunctionBuildScatterGatherList,
+    ExtFunctionPutScatterGatherList,
+
+    ///////////////////////////////////////////
+    //      Vista
+    ExtFunctionAcquireMSISpinLock,
+    ExtFunctionReleaseMSISpinLock,
+    ExtFunctionGetMessageInterruptInformation,
+    ExtFunctionInitializePerformanceOptimizations,
+    ExtFunctionGetStartIoPerformanceParameters,
+
+    ///////////////////////////////////////////
+    //      Windows 7
+    ExtFunctionLogSystemEvent,
+    ExtFunctionGetCurrentProcessorNumber,
+    ExtFunctionGetActiveGroupCount,
+    ExtFunctionGetGroupAffinity,
+    ExtFunctionGetActiveNodeCount,
+    ExtFunctionGetNodeAffinity,
+    ExtFunctionGetHighestNodeNumber,
+    ExtFunctionGetLogicalProcessorRelationship,
+    ExtFunctionAllocateContiguousMemorySpecifyCacheNode,
+    ExtFunctionFreeContiguousMemorySpecifyCache,    // 25
+    
+    ///////////////////////////////////////////
+    //      Windows 8
+    ExtFunctionSetPowerSettingNotificationGuids,    // +
+    ExtFunctionInvokeAcpiMethod,                    // +
+    ExtFunctionGetRequestInfo,
+    ExtFunctionInitializeWorker,
+    ExtFunctionQueueWorkItem,
+    ExtFunctionFreeWorker,
+    ExtFunctionInitializeTimer,                     // +
+    ExtFunctionRequestTimer,                        // +
+    ExtFunctionFreeTimer,                           // +
+    ExtFunctionInitializeSListHead,
+    ExtFunctionInterlockedFlushSList,
+    ExtFunctionInterlockedPopEntrySList,
+    ExtFunctionInterlockedPushEntrySList,
+    ExtFunctionQueryDepthSList,
+    ExtFunctionGetActivityId,                       // +
+    ExtFunctionGetSystemPortNumber,
+    ExtFunctionGetDataInBufferMdl,
+    ExtFunctionGetDataInBufferSystemAddress,
+    ExtFunctionGetDataInBufferScatterGatherList,
+    ExtFunctionMarkDumpMemory,                      // +
+    ExtFunctionSetUnitAttributes,                   // +
+    ExtFunctionQueryPerformanceCounter,             // +
+    ExtFunctionInitializePoFxPower,                 // +
+    ExtFunctionPoFxActivateComponent,               // +    
+    ExtFunctionPoFxIdleComponent,                   // +
+    ExtFunctionPoFxSetComponentLatency,             // +
+    ExtFunctionPoFxSetComponentResidency,           // +
+    ExtFunctionPoFxPowerControl,                    // +
+    ExtFunctionFlushDataBufferMdl,
+    ExtFunctionDeviceOperationAllowed,              // +
+
+    ///////////////////////////////////////////
+    //      Windows 8.1
+    ExtFunctionGetProcessorIndexFromNumber,         // 56 - available in Win7 
+    ExtFunctionPoFxSetIdleTimeout,
+    ExtFunctionMiniportEtwEvent2,
+    ExtFunctionMiniportEtwEvent4,
+    ExtFunctionMiniportEtwEvent8,
+    ExtFunctionCurrentOsInstallationUpgrade,
+
+    ///////////////////////////////////////////
+    //      Windows 10
+    ExtFunctionRegistryReadAdapterKey,
+    ExtFunctionRegistryWriteAdapterKey,
+    ExtFunctionSetAdapterBusType,
+    ExtFunctionPoFxRegisterPerfStates,
+    ExtFunctionPoFxSetPerfState,
+    ExtFunctionGetD3ColdSupport,
+    ExtFunctionInitializeRpmb,
+    ExtFunctionAllocateHmb,
+    ExtFunctionFreeHmb,
+    ExtFunctionPropagateIrpExtension,
+    ExtFunctionInterlockedInsertHeadList,
+    ExtFunctionInterlockedInsertTailList,
+    ExtFunctionInterlockedRemoveHeadList,
+    ExtFunctionInitializeSpinlock,
+    ExtFunctionGetPfns,
+    ExtFunctionInitializeCryptoEngine,
+    ExtFunctionGetRequestCryptoInfo,
+    ExtFunctionMiniportTelemetry
+} STORPORT_FUNCTION_CODE, *PSTORPORT_FUNCTION_CODE;
+
 
 #define STOR_STATUS_SUCCESS                 (0x00000000L)
 #define STOR_STATUS_UNSUCCESSFUL            (0xC1000001L)
@@ -29,6 +132,35 @@
 #else
 #define STOR_ADDRESS_ALIGN
 #endif
+
+
+///////////////////////////////////////////
+// storport.lib
+ULONG
+StorPortInitialize (
+    PVOID Argument1,
+    PVOID Argument2,
+    struct _HW_INITIALIZATION_DATA *HwInitializationData,
+    PVOID HwContext );
+
+BOOLEAN
+StorPortRegistryRead (
+    PVOID HwDeviceExtension,
+    PUCHAR ValueName,
+    ULONG Global,
+    ULONG Type,
+    PUCHAR Buffer,
+    PULONG BufferLength );
+
+ULONG
+StorPortExtendedFunction (
+    STORPORT_FUNCTION_CODE FunctionCode,
+    PVOID HwDeviceExtension,
+    ... );
+
+// storport.lib
+///////////////////////////////////////////
+
 
 enum _STOR_SYNCHRONIZATION_MODEL
 {
@@ -65,7 +197,7 @@ enum _DEVICE_STATE
 };
 
 
-typedef struct _STOR_LOCKED_LIST        // Size=0x10
+typedef struct _STOR_LOCKED_LIST            // Size=0x10
 {
     KSPIN_LOCK          Lock;   // Offset=0x0 Size=0x4
     struct _LIST_ENTRY  List;   // Offset=0x4 Size=0x8
@@ -73,7 +205,7 @@ typedef struct _STOR_LOCKED_LIST        // Size=0x10
 } STOR_LOCKED_LIST;
 
 
-typedef struct _STOR_DICTIONARY     // Size=0x1c
+typedef struct _STOR_DICTIONARY             // Size=0x1c
 {
     unsigned long        EntryCount;                            // Offset=0x0 Size=0x4
     unsigned long        MaxEntryCount;                         // Offset=0x4 Size=0x4
@@ -116,7 +248,7 @@ typedef struct _RAID_BUS_INTERFACE          // Size=0x24
 } RAID_BUS_INTERFACE;
 
 
-typedef struct _STOR_SCSI_ADDRESS       // Size=0x4
+typedef struct _STOR_SCSI_ADDRESS           // Size=0x4
 {
     unsigned char PathId;               // Offset=0x0 Size=0x1
     unsigned char TargetId;             // Offset=0x1 Size=0x1
@@ -142,7 +274,6 @@ typedef struct STOR_ADDRESS_ALIGN _STOR_ADDRESS {
     ULONG  AddressLength;
     UCHAR  AddressData[4];
 } STOR_ADDRESS, *PSTOR_ADDRESS;
-
 
 
 #ifndef STORPORT_W8
@@ -474,8 +605,6 @@ typedef struct _RAID_UNIT_EXTENSION          // Size=0x2a0
 
 
 
-
-
 typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
 {
     RAID_ADAPTER_EXTENSION *Adapter;               // Offset=0x0 Size=0x4
@@ -492,6 +621,102 @@ typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
 /////////////////////////////////////////////////////////
 // Static variables
 
+//UNICODE_STRING StorPortInitializeName       = RTL_CONSTANT_STRING(L"StorPortInitialize");
+//UNICODE_STRING StorPortRegistryReadName     = RTL_CONSTANT_STRING(L"StorPortRegistryRead");
+//UNICODE_STRING StorPortExtendedFunctionName = RTL_CONSTANT_STRING(L"StorPortExtendedFunction");
+// LIST_ENTRY *gPsLoadedModuleList;
+
+const char* DUMPPREFIX = "dump";
+
+extern const
+LARGE_INTEGER   MmShortTime;
+
+BOOLEAN         gIsWeInitialized = FALSE;
+BOOLEAN         gDumpMode;
+
+PVOID    gScsiPortMoveMemory;
+PVOID    gScsiPortNotification;
+PVOID    gStorPortAllocateRegistryBuffer;
+PVOID    gStorPortBusy;
+PVOID    gStorPortCompleteRequest;
+PVOID    gStorPortConvertUlongToPhysicalAddress;
+PVOID    gStorPortDebugPrint;
+PVOID    gStorPortDeviceBusy;
+PVOID    gStorPortDeviceReady;
+PVOID    gStorPortFreeDeviceBase;
+PVOID    gStorPortFreeRegistryBuffer;
+PVOID    gStorPortGetBusData;
+PVOID    gStorPortGetDeviceBase;
+PVOID    gStorPortGetLogicalUnit;
+PVOID    gStorPortGetPhysicalAddress;
+PVOID    gStorPortGetScatterGatherList;
+PVOID    gStorPortGetSrb;
+PVOID    gStorPortGetUncachedExtension;
+PVOID    gStorPortGetVirtualAddress;
+PVOID    gStorPortLogError;
+PVOID    gStorPortMoveMemory;
+PVOID    gStorPortNotification;
+PVOID    gStorPortPause;
+PVOID    gStorPortPauseDevice;
+PVOID    gStorPortQuerySystemTime;
+PVOID    gStorPortReadPortBufferUchar;
+PVOID    gStorPortReadPortBufferUlong;
+PVOID    gStorPortReadPortBufferUshort;
+PVOID    gStorPortReadPortUchar;
+PVOID    gStorPortReadPortUlong;
+PVOID    gStorPortReadPortUshort;
+PVOID    gStorPortReadRegisterBufferUchar;
+PVOID    gStorPortReadRegisterBufferUlong;
+PVOID    gStorPortReadRegisterBufferUshort;
+PVOID    gStorPortReadRegisterUchar;
+PVOID    gStorPortReadRegisterUlong;
+PVOID    gStorPortReadRegisterUshort;
+PVOID    gStorPortReady;
+PVOID    gStorPortRegistryWrite;
+PVOID    gStorPortResume;
+PVOID    gStorPortResumeDevice;
+PVOID    gStorPortSetBusDataByOffset;
+PVOID    gStorPortSetDeviceQueueDepth;
+PVOID    gStorPortStallExecution;
+PVOID    gStorPortSynchronizeAccess;
+PVOID    gStorPortValidateRange;
+PVOID    gStorPortWritePortBufferUchar;
+PVOID    gStorPortWritePortBufferUlong;
+PVOID    gStorPortWritePortBufferUshort;
+PVOID    gStorPortWritePortUchar;
+PVOID    gStorPortWritePortUlong;
+PVOID    gStorPortWritePortUshort;
+PVOID    gStorPortWriteRegisterBufferUchar;
+PVOID    gStorPortWriteRegisterBufferUlong;
+PVOID    gStorPortWriteRegisterBufferUshort;
+PVOID    gStorPortWriteRegisterUchar;
+PVOID    gStorPortWriteRegisterUlong;
+PVOID    gStorPortWriteRegisterUshort;
+
+
+ULONG
+(*gStorPortInitialize) (
+    PVOID Argument1,
+    PVOID Argument2,
+    struct _HW_INITIALIZATION_DATA *HwInitializationData,
+    PVOID HwContext );
+
+BOOLEAN
+(*gStorPortRegistryRead) (
+    PVOID HwDeviceExtension,
+    PUCHAR ValueName,
+    ULONG Global,
+    ULONG Type,
+    PUCHAR Buffer,
+    PULONG BufferLength );
+
+ULONG
+(*gStorPortExtendedFunction) (
+    STORPORT_FUNCTION_CODE FunctionCode,
+    PVOID HwDeviceExtension,
+    ULONG_PTR va1, ULONG_PTR va2, ULONG_PTR va3, ULONG_PTR va4, ULONG_PTR va5, ULONG_PTR va6, ULONG_PTR va7,
+    ULONG_PTR va8, ULONG_PTR va9, ULONG_PTR va10, ULONG_PTR va11, ULONG_PTR va12, ULONG_PTR va13);
+
 // Static variables
 /////////////////////////////////////////////////////////
 
@@ -500,10 +725,128 @@ typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
 /////////////////////////////////////////////////////////
 //                Functions
 
-void
-StorportInitialize() 
+
+BOOLEAN
+isDumpMode(PUNICODE_STRING RegistryPath)
 {
-    ;
+    ANSI_STRING AnsiString;
+    PCHAR       s;
+    NTSTATUS    Status;
+
+    if (RegistryPath == NULL)
+        return TRUE;
+
+    do {
+        Status = RtlUnicodeStringToAnsiString(&AnsiString, RegistryPath, TRUE);
+
+        if (NT_SUCCESS (Status)) {
+            break;
+        }
+
+        KeDelayExecutionThread (KernelMode, FALSE, (PLARGE_INTEGER)&MmShortTime);
+
+    } while (TRUE);
+
+    s = AnsiString.Buffer + AnsiString.Length;
+    while (s > AnsiString.Buffer && *--s)
+    {
+        if (*s == (UCHAR)OBJ_NAME_PATH_SEPARATOR)
+        {
+            s += 1;
+            break;
+        }
+    }
+
+    if (strstr(s, DUMPPREFIX) == s)
+        return TRUE;
+    else
+        return FALSE;
+    
+}
+
+
+#define GETROUTINE(x)                                                   \
+           RtlInitAnsiString(&AnsiString, #x);                          \
+           g##x = MiFindExportedRoutineByName(BaseAdress, &AnsiString);           
+
+void
+StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath) 
+{
+    ANSI_STRING     AnsiString;
+    PVOID           BaseAdress;
+
+    gIsWeInitialized = TRUE;
+    gDumpMode=isDumpMode(RegistryPath);
+
+    if (gDumpMode) {
+        BaseAdress = GetModuleBaseAddress("dump_diskdump.sys");
+        if (BaseAdress == NULL) {
+            gDumpMode = FALSE;      // error,  dump_diskdump.sys not found
+            return;
+        }
+
+        GETROUTINE(ScsiPortMoveMemory)
+        GETROUTINE(ScsiPortNotification)
+        GETROUTINE(StorPortAllocateRegistryBuffer)
+        GETROUTINE(StorPortBusy)
+        GETROUTINE(StorPortCompleteRequest)
+        GETROUTINE(StorPortConvertUlongToPhysicalAddress)
+        GETROUTINE(StorPortDebugPrint)
+        GETROUTINE(StorPortDeviceBusy)
+        GETROUTINE(StorPortDeviceReady)
+        GETROUTINE(StorPortExtendedFunction)
+        GETROUTINE(StorPortFreeDeviceBase)
+        GETROUTINE(StorPortFreeRegistryBuffer)
+        GETROUTINE(StorPortGetBusData)
+        GETROUTINE(StorPortGetDeviceBase)
+        GETROUTINE(StorPortGetLogicalUnit)
+        GETROUTINE(StorPortGetPhysicalAddress)
+        GETROUTINE(StorPortGetScatterGatherList)
+        GETROUTINE(StorPortGetSrb)
+        GETROUTINE(StorPortGetUncachedExtension)
+        GETROUTINE(StorPortGetVirtualAddress)
+        GETROUTINE(StorPortLogError)
+        GETROUTINE(StorPortInitialize)
+        GETROUTINE(StorPortMoveMemory)
+        GETROUTINE(StorPortNotification)
+        GETROUTINE(StorPortPause)
+        GETROUTINE(StorPortPauseDevice)
+        GETROUTINE(StorPortQuerySystemTime)
+        GETROUTINE(StorPortReadPortBufferUchar)
+        GETROUTINE(StorPortReadPortBufferUlong)
+        GETROUTINE(StorPortReadPortBufferUshort)
+        GETROUTINE(StorPortReadPortUchar)
+        GETROUTINE(StorPortReadPortUlong)
+        GETROUTINE(StorPortReadPortUshort)
+        GETROUTINE(StorPortReadRegisterBufferUchar)
+        GETROUTINE(StorPortReadRegisterBufferUlong)
+        GETROUTINE(StorPortReadRegisterBufferUshort)
+        GETROUTINE(StorPortReadRegisterUchar)
+        GETROUTINE(StorPortReadRegisterUlong)
+        GETROUTINE(StorPortReadRegisterUshort)
+        GETROUTINE(StorPortReady)
+        GETROUTINE(StorPortRegistryRead)
+        GETROUTINE(StorPortRegistryWrite)
+        GETROUTINE(StorPortResume)
+        GETROUTINE(StorPortResumeDevice)
+        GETROUTINE(StorPortSetBusDataByOffset)
+        GETROUTINE(StorPortSetDeviceQueueDepth)
+        GETROUTINE(StorPortStallExecution)
+        GETROUTINE(StorPortSynchronizeAccess)
+        GETROUTINE(StorPortValidateRange)
+        GETROUTINE(StorPortWritePortBufferUchar)
+        GETROUTINE(StorPortWritePortBufferUlong)
+        GETROUTINE(StorPortWritePortBufferUshort)
+        GETROUTINE(StorPortWritePortUchar)
+        GETROUTINE(StorPortWritePortUlong)
+        GETROUTINE(StorPortWritePortUshort)
+        GETROUTINE(StorPortWriteRegisterBufferUchar)
+        GETROUTINE(StorPortWriteRegisterBufferUlong)
+        GETROUTINE(StorPortWriteRegisterBufferUshort)
+        GETROUTINE(StorPortWriteRegisterUchar)
+        GETROUTINE(StorPortWriteRegisterUlong)
+        GETROUTINE(StorPortWriteRegisterUshort)
+    }
 }
 
 
@@ -536,7 +879,7 @@ GetAdapter (PVOID HwDeviceExtension)
 
 
 ULONG
-RaidSyncAcpiEvalMethod (                          //RE storport_w8
+RaidSyncAcpiEvalMethod (
     PDEVICE_OBJECT  DeviceObject,
     PVOID           InputBuffer,
     ULONG           InputBufferLength,
@@ -605,6 +948,7 @@ RaidSyncAcpiEvalMethod (                          //RE storport_w8
 
 }
 
+
 KIRQL
 RaidAdapterAcquireInterruptLock (
     RAID_ADAPTER_EXTENSION  *Adapter )
@@ -614,6 +958,7 @@ RaidAdapterAcquireInterruptLock (
     else
         return PASSIVE_LEVEL;
 }
+
 
 void
 RaidAdapterReleaseInterruptLock (
@@ -670,9 +1015,9 @@ StorFindDictionary (
     CompareKeyRoutine   = (PVOID) UnitDictionary->CompareKeyRoutine;
     HashKeyRoutine      = (PVOID) UnitDictionary->HashKeyRoutine;
     
-    ListHead = Entries +
+    ListHead = (LIST_ENTRY  *) ((UCHAR *)Entries +
                  sizeof(LIST_ENTRY) *
-                 (HashKeyRoutine((void *)AddressToLong) % UnitDictionary->MaxEntryCount);
+                 (HashKeyRoutine((void *)AddressToLong) % UnitDictionary->MaxEntryCount));
     List = ListHead->Flink;
 
     for (List = ListHead->Flink; List != ListHead; List = List->Flink)
@@ -797,8 +1142,9 @@ StorpFreeTimerWorkItemCallback(
   KeFlushQueuedDpcs();
   IoFreeWorkItem(Timer->FreeTimerWorkItem);
   ExFreePoolWithTag(Timer, 'TAaR');
-  //InterlockedDecrement(&g_AllocatedTimers);
+  //InterlockedDecrement(&gAllocatedTimers);
 }
+
 
 typedef void
 HW_TIMER_EX (
@@ -809,12 +1155,13 @@ typedef HW_TIMER_EX *PHW_TIMER_EX;
 
 
 // pattern generator.
-#define PATTERN "InTheHeatOfTheNigthILooseControl" // (c) Sandra
+#define PATTERN "InTheHeatOfTheNightILooseControl" // (c) Sandra
 #define PATTERN_SIZE (sizeof(PATTERN) - 1)
 UCHAR const gPattern[] = PATTERN;
 
+
 VOID
-FillBufferWithPattern(UCHAR *Buffer, ULONG BufferLength )
+FillBufferWithPattern (UCHAR *Buffer, ULONG BufferLength )
 {
     ULONG Index;
     ULONG Rotor = 0;
@@ -853,6 +1200,46 @@ isPatternMatch (UCHAR *Buffer, ULONG BufferLength )
 //                     preWin8 STORPORT.SYS Hooks                                //
 
 
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:StorPortInitialize=_StorPortInitialize_k8@16")
+#else
+ #pragma comment (linker, "/export:StorPortInitialize=StorPortInitialize_k8")
+#endif
+
+ULONG
+StorPortInitialize_k8 (
+    PVOID Argument1,
+    PVOID Argument2,
+    struct _HW_INITIALIZATION_DATA *HwInitializationData,
+    PVOID HwContext )
+{
+    if (!gIsWeInitialized)                  // dump mode, called from miniport
+        StorportInit(Argument1, Argument2); // both args are null
+
+    if (gDumpMode)          // passthrough
+        return gStorPortInitialize(
+                    Argument1,
+                    Argument2,
+                    HwInitializationData,
+                    HwContext);
+    else
+        return StorPortInitialize(
+                    Argument1,
+                    Argument2,
+                    HwInitializationData,
+                    HwContext);
+}
+
+
+
+
+#define _StorPortRegistryRead
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:StorPortRegistryRead=_StorPortRegistryRead_k8@24")
+#else
+ #pragma comment (linker, "/export:StorPortRegistryRead=StorPortRegistryRead_k8")
+#endif
+
 // StorPortRegistryRead has BUG, it always return TRUE and skip clearing BufferLength even if ValueName was not found
 BOOLEAN
 StorPortRegistryRead_k8 (
@@ -864,6 +1251,16 @@ StorPortRegistryRead_k8 (
     PULONG BufferLength )
 {
     BOOLEAN status;
+
+   if (gDumpMode)           // passthrough
+        return gStorPortRegistryRead(
+                        HwDeviceExtension,
+                        ValueName,
+                        Global,
+                        Type,
+                        Buffer,
+                        BufferLength );
+
 
     ULONG OldBufferLength = *BufferLength;
     FillBufferWithPattern(Buffer, *BufferLength);
@@ -888,6 +1285,13 @@ StorPortRegistryRead_k8 (
     return status;
 }
 
+
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:StorPortExtendedFunction=_StorPortExtendedFunction_k8")
+#else
+ #pragma comment (linker, "/export:StorPortExtendedFunction=StorPortExtendedFunction_k8")
+#endif
+
 ULONG __cdecl StorPortExtendedFunction_k8(
     STORPORT_FUNCTION_CODE FunctionCode,
     PVOID HwDeviceExtension,
@@ -895,6 +1299,10 @@ ULONG __cdecl StorPortExtendedFunction_k8(
     ULONG_PTR va8, ULONG_PTR va9, ULONG_PTR va10, ULONG_PTR va11, ULONG_PTR va12, ULONG_PTR va13)
 {
 
+    if (gDumpMode)          // passthrough
+        return gStorPortExtendedFunction(FunctionCode, HwDeviceExtension,
+                     va1, va2, va3, va4, va5, va6, va7, va8,
+                     va9, va10, va11, va12, va13);
 
     if (FunctionCode <= ExtFunctionFreeContiguousMemorySpecifyCache ||      // storport_w7 has
         FunctionCode == ExtFunctionGetProcessorIndexFromNumber)             // 1-25, 56 Extended Functions
@@ -1070,7 +1478,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
          }
          
         ExFreePoolWithTag(TimerHandle, 'TAaR');
-        //InterlockedDecrement(&g_AllocatedTimers);
+        //InterlockedDecrement(&gAllocatedTimers);
     
         return STOR_STATUS_SUCCESS;
     }
@@ -1101,7 +1509,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
         Timer->Adapter = Adapter;
         KeInitializeTimer(&Timer->Timer);
         KeInitializeDpc(&Timer->TimerDpc, (PKDEFERRED_ROUTINE) StorportTimerDpc, Timer);
-        //InterlockedIncrement(&g_AllocatedTimers);
+        //InterlockedIncrement(&gAllocatedTimers);
         *TimerHandle = Timer;
 
         return STOR_STATUS_SUCCESS;
@@ -1312,7 +1720,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
                 return STOR_STATUS_INSUFFICIENT_RESOURCES;
             }
             else {
-                KeSetCoalescableTimer_k8(
+                KeSetCoalescableTimer(
                                 &TimerHandle->Timer,
                                 DueTime,
                                 0,
@@ -1331,5 +1739,36 @@ ULONG __cdecl StorPortExtendedFunction_k8(
 }    
 
 
+NTSTATUS
+DriverEntry (                // Dummy entry
+    PDRIVER_OBJECT DriverObject,
+    PUNICODE_STRING RegistryPath )
+{
+    return STATUS_SUCCESS;
+}
 
-#include "storport_redirects.h"
+
+NTSTATUS
+DllInitialize (                // Main entry
+    PUNICODE_STRING  RegistryPath )
+{
+     /*     // debug loop
+    __asm {
+        L1:
+        jmp L1
+    }
+     */
+    
+    StorportInit((PVOID)-1, RegistryPath);
+
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS
+DllUnload (void)
+{
+    return STATUS_SUCCESS;
+}
+
+//#include "storport_redirects.h"

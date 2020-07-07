@@ -6,108 +6,101 @@
 #define LEAVE   goto __tryLabel;
 #define FINALLY __tryLabel:
 
-typedef enum _STORPORT_FUNCTION_CODE_W10 {
-    ///////////////////////////////////////////
-    //      Windows 2003
-    ExtFunctionAllocatePool,
-    ExtFunctionFreePool,
-    ExtFunctionAllocateMdl,
-    ExtFunctionFreeMdl,
-    ExtFunctionBuildMdlForNonPagedPool,
-    ExtFunctionGetSystemAddress,
-    ExtFunctionGetOriginalMdl,
-    ExtFunctionCompleteServiceIrp,
-    ExtFunctionGetDeviceObjects,
-    ExtFunctionBuildScatterGatherList,
-    ExtFunctionPutScatterGatherList,
 
-    ///////////////////////////////////////////
-    //      Vista
-    ExtFunctionAcquireMSISpinLock,
-    ExtFunctionReleaseMSISpinLock,
-    ExtFunctionGetMessageInterruptInformation,
-    ExtFunctionInitializePerformanceOptimizations,
-    ExtFunctionGetStartIoPerformanceParameters,
-
-    ///////////////////////////////////////////
-    //      Windows 7
-    ExtFunctionLogSystemEvent,
-    ExtFunctionGetCurrentProcessorNumber,
-    ExtFunctionGetActiveGroupCount,
-    ExtFunctionGetGroupAffinity,
-    ExtFunctionGetActiveNodeCount,
-    ExtFunctionGetNodeAffinity,
-    ExtFunctionGetHighestNodeNumber,
-    ExtFunctionGetLogicalProcessorRelationship,
-    ExtFunctionAllocateContiguousMemorySpecifyCacheNode,
-    ExtFunctionFreeContiguousMemorySpecifyCache,    // 25
-    
-    ///////////////////////////////////////////
-    //      Windows 8
-    ExtFunctionSetPowerSettingNotificationGuids,    // +
-    ExtFunctionInvokeAcpiMethod,                    // +
-    ExtFunctionGetRequestInfo,
-    ExtFunctionInitializeWorker,
-    ExtFunctionQueueWorkItem,
-    ExtFunctionFreeWorker,
-    ExtFunctionInitializeTimer,                     // +
-    ExtFunctionRequestTimer,                        // +
-    ExtFunctionFreeTimer,                           // +
-    ExtFunctionInitializeSListHead,
-    ExtFunctionInterlockedFlushSList,
-    ExtFunctionInterlockedPopEntrySList,
-    ExtFunctionInterlockedPushEntrySList,
-    ExtFunctionQueryDepthSList,
-    ExtFunctionGetActivityId,                       // +
-    ExtFunctionGetSystemPortNumber,
-    ExtFunctionGetDataInBufferMdl,
-    ExtFunctionGetDataInBufferSystemAddress,
-    ExtFunctionGetDataInBufferScatterGatherList,
-    ExtFunctionMarkDumpMemory,                      // +
-    ExtFunctionSetUnitAttributes,                   // +
-    ExtFunctionQueryPerformanceCounter,             // +
-    ExtFunctionInitializePoFxPower,                 // +
-    ExtFunctionPoFxActivateComponent,               // +    
-    ExtFunctionPoFxIdleComponent,                   // +
-    ExtFunctionPoFxSetComponentLatency,             // +
-    ExtFunctionPoFxSetComponentResidency,           // +
-    ExtFunctionPoFxPowerControl,                    // +
-    ExtFunctionFlushDataBufferMdl,
-    ExtFunctionDeviceOperationAllowed,              // +
-
-    ///////////////////////////////////////////
-    //      Windows 8.1
-    ExtFunctionGetProcessorIndexFromNumber,         // 56 - available in Win7 
-    ExtFunctionPoFxSetIdleTimeout,
-    ExtFunctionMiniportEtwEvent2,
-    ExtFunctionMiniportEtwEvent4,
-    ExtFunctionMiniportEtwEvent8,
-    ExtFunctionCurrentOsInstallationUpgrade,
-
-    ///////////////////////////////////////////
-    //      Windows 10
-    ExtFunctionRegistryReadAdapterKey,
-    ExtFunctionRegistryWriteAdapterKey,
-    ExtFunctionSetAdapterBusType,
-    ExtFunctionPoFxRegisterPerfStates,
-    ExtFunctionPoFxSetPerfState,
-    ExtFunctionGetD3ColdSupport,
-    ExtFunctionInitializeRpmb,
-    ExtFunctionAllocateHmb,
-    ExtFunctionFreeHmb,
-    ExtFunctionPropagateIrpExtension,
-    ExtFunctionInterlockedInsertHeadList,
-    ExtFunctionInterlockedInsertTailList,
-    ExtFunctionInterlockedRemoveHeadList,
-    ExtFunctionInitializeSpinlock,
-    ExtFunctionGetPfns,
-    ExtFunctionInitializeCryptoEngine,
-    ExtFunctionGetRequestCryptoInfo,
-    ExtFunctionMiniportTelemetry
-} STORPORT_FUNCTION_CODE, *PSTORPORT_FUNCTION_CODE;
+typedef enum _SYSTEM_INFORMATION_CLASS {
+    SystemBasicInformation,
+    SystemProcessorInformation,
+    SystemPerformanceInformation,
+    SystemTimeOfDayInformation,
+    SystemPathInformation,
+    SystemProcessInformation,
+    SystemCallCountInformation,
+    SystemDeviceInformation,
+    SystemProcessorPerformanceInformation,
+    SystemFlagsInformation,
+    SystemCallTimeInformation,
+    SystemModuleInformation,
+    SystemLocksInformation,
+    SystemStackTraceInformation,
+    SystemPagedPoolInformation,
+    SystemNonPagedPoolInformation,
+    SystemHandleInformation,
+    SystemObjectInformation,
+    SystemPageFileInformation,
+    SystemVdmInstemulInformation,
+    SystemVdmBopInformation,
+    SystemFileCacheInformation,
+    SystemPoolTagInformation,
+    SystemInterruptInformation,
+    SystemDpcBehaviorInformation,
+    SystemFullMemoryInformation,
+    SystemLoadGdiDriverInformation,
+    SystemUnloadGdiDriverInformation,
+    SystemTimeAdjustmentInformation,
+    SystemSummaryMemoryInformation,
+    SystemMirrorMemoryInformation,
+    SystemPerformanceTraceInformation,
+    SystemObsolete0,
+    SystemExceptionInformation,
+    SystemCrashDumpStateInformation,
+    SystemKernelDebuggerInformation,
+    SystemContextSwitchInformation,
+    SystemRegistryQuotaInformation,
+    SystemExtendServiceTableInformation,
+    SystemPrioritySeperation,
+    SystemVerifierAddDriverInformation,
+    SystemVerifierRemoveDriverInformation,
+    SystemProcessorIdleInformation,
+    SystemLegacyDriverInformation,
+    SystemCurrentTimeZoneInformation,
+    SystemLookasideInformation,
+    SystemTimeSlipNotification,
+    SystemSessionCreate,
+    SystemSessionDetach,
+    SystemSessionInformation,
+    SystemRangeStartInformation,
+    SystemVerifierInformation,
+    SystemVerifierThunkExtend,
+    SystemSessionProcessInformation,
+    SystemLoadGdiDriverInSystemSpace,
+    SystemNumaProcessorMap,
+    SystemPrefetcherInformation,
+    SystemExtendedProcessInformation,
+    SystemRecommendedSharedDataAlignment,
+    SystemComPlusPackage,
+    SystemNumaAvailableMemory,
+    SystemProcessorPowerInformation,
+    SystemEmulationBasicInformation,
+    SystemEmulationProcessorInformation,
+    SystemExtendedHandleInformation,
+    SystemLostDelayedWriteInformation,
+    SystemBigPoolInformation,
+    SystemSessionPoolTagInformation,
+    SystemSessionMappedViewInformation,
+    SystemHotpatchInformation,
+    SystemObjectSecurityMode,
+    SystemWatchdogTimerHandler,
+    SystemWatchdogTimerInformation,
+    SystemLogicalProcessorInformation,
+    SystemWow64SharedInformation,
+    SystemRegisterFirmwareTableInformationHandler,
+    SystemFirmwareTableInformation,
+    SystemModuleInformationEx,
+    SystemVerifierTriageInformation,
+    SystemSuperfetchInformation,
+    SystemMemoryListInformation,
+    SystemFileCacheInformationEx,
+    MaxSystemInfoClass
+} SYSTEM_INFORMATION_CLASS;
 
 
-
+NTSTATUS
+NtQuerySystemInformation (		// exportable by kernel
+    SYSTEM_INFORMATION_CLASS SystemInformationClass,
+    PVOID                    SystemInformation,
+    ULONG                    SystemInformationLength,
+    PULONG                   ReturnLength
+    );
 
 
 
@@ -123,26 +116,6 @@ KeSetCoalescableTimer_k8 (
     KDPC           *Dpc);
 
 
-BOOLEAN
-StorPortRegistryRead (
-    PVOID HwDeviceExtension,
-    PUCHAR ValueName,
-    ULONG Global,
-    ULONG Type,
-    PUCHAR Buffer,
-    PULONG BufferLength );
-
-
-ULONG
-StorPortExtendedFunction (
-    STORPORT_FUNCTION_CODE FunctionCode,
-    PVOID HwDeviceExtension,
-    ... );
-
-
-void
-StorportInitialize(void);
-
 NTSTATUS
 EtwRegister_k8 (
     LPCGUID             ProviderId,
@@ -152,9 +125,19 @@ EtwRegister_k8 (
 
 void PrintNumaCpuConfiguration(void);
 
+
+PVOID
+GetRoutineAddress (
+    PUNICODE_STRING SystemRoutineName,
+    const PCHAR Modulename);
+
+PVOID
+GetModuleBaseAddress (
+    const PCHAR Modulename);
+
+
 // early + external definition
 /////////////////////////////////////////////////////////
-
 
 
 #if (NTDDI_VERSION <= NTDDI_WS03SP4)            // Windows XP/2003
@@ -174,3 +157,15 @@ void PrintNumaCpuConfiguration(void);
         // struct _GUID ActivityId;             // Windows 8+
     } IO_WORKITEM;
 #endif
+
+
+#if (NTDDI_VERSION <= NTDDI_WINXPSP1)
+ #define ExAcquireRundownProtectionEx ExAcquireRundownProtectionEx_k8
+ #define ExReleaseRundownProtectionEx ExReleaseRundownProtectionEx_k8
+#endif
+
+
+#if (NTDDI_VERSION <= NTDDI_VISTASP4)
+ #define KeSetCoalescableTimer KeSetCoalescableTimer_k8
+#endif
+

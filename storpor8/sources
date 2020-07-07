@@ -1,0 +1,43 @@
+#########################################################################
+USE_NOLIBS=1
+BUFFER_OVERFLOW_CHECKS=0
+
+USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
+# /P /Fiheaders/
+
+#MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /Oxsy
+#!if $(386)
+#MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /arch:IA32 #disable sse
+#!endif
+#########################################################################
+
+
+TARGETNAME=storpor8
+TARGETTYPE=EXPORT_DRIVER
+TARGETPATH=obj$(BUILD_ALT_DIR)
+
+
+# ntstrsafe need for _memcpy
+!if $(386)
+TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
+		$(DDK_LIB_PATH)\ntstrsafe.lib \
+                ..\ntoskrn8\$(O)\ntoskrn8.lib \
+                ..\i386\storport.lib 
+
+!else
+TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
+		$(DDK_LIB_PATH)\ntstrsafe.lib \
+                ..\ntoskrn8\$(O)\ntoskrn8.lib \
+                ..\amd64\storport.lib 
+!endif
+
+SOURCES=	..\storpor8.c  \
+                ..\storpor8.rc \
+                ..\wrk2003.c   \
+                ..\common.c
+
+I386_SOURCES=   ..\storpor8_stubs.asm
+
+AMD64_SOURCES=  ..\storpor8_stubs.asm
+
+DLLDEF=$(OBJ_PATH)\$(O)\storpor8.def

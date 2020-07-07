@@ -6,9 +6,9 @@ Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work 
 
 **How-To:**
 1) Compile sources to make **ntoskrn8.sys**
-2) Make corrections to xxx.sys so that it loads **ntoskrn8.sys** instead of the original **ntoskrnl.exe**
-3) Place **ntoskrn8.sys** to **X:/Windows/sytem32/drivers/** folder
-4) Place storport.sys to **X:/Windows/sytem32/drivers/** folder (Windows 2003 version is OK, Windows 7 version is preffered)
+2) Make corrections to target xxx.sys so that it loads **ntoskrn8.sys** instead of the original **ntoskrnl.exe**
+3) Place **ntoskrn8.sys** to **X:/Windows/system32/drivers/** folder
+
 
 **Compiling:**
 1) Install Windows 7 DDK v7.1.0 (download from Microsoft site)
@@ -21,17 +21,24 @@ Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work 
 Keep in mind that depending on the target operating system the way of exporting the functions changes,
 if a function already exists in the kernel it will be simply redirected without injecting emulation code
 
-4)If Target OS is Windows XP, inside installed DDK directory replace **lib\wxp\i386\storport.lib** with **lib\wnet\i386\storport.lib**
-
-5) Run shell Start Menu\Programs\Windows Driver Kits\Win7 7600.16385.1\Build Environments\Windows XXX\x86 Free Build Environment
+4) Run shell Start Menu\Programs\Windows Driver Kits\Win7 7600.16385.1\Build Environments\Windows XXX\x86 Free Build Environment
 **XXX** - target OS
 
-6) In shell change current directory to local project folder
+5) In shell change current directory to local project folder
 
-7) Use shell command BLD to compile project
+6) Use shell command BLD to compile project
 
-8) Compiled ntoskrn8.sys will be in **objfre_XXX_x86/i386** folder
+7) Compiled ntoskrn8.sys will be in **ntoskrn8/objfre_XXX_x86/i386** folder
 
+
+STORPORT Windows 7 Emu_Extender
+===========================
+This is Library of missing functions for Windows 7 STORPORT.SYS to emulate Windows 8 STORPORT.SYS
+
+**How-To:**
+1) Compile ntoskrnl Emu_Extender
+2) Place storpor8.sys to **X:/Windows/system32/drivers/** folder
+3) Make corrections to target xxx.sys so that it loads **storpor8.sys** instead of the original **storport.sys**
 
 
 Ported drivers:
@@ -135,9 +142,8 @@ Win8's STORAHCI + Win7's STORPORT have **significal performance drop and high CP
 
        storahci.sys	v 6.2.9200.16384
 
-2) In storahci.sys replace string **storport.sys** to **ntoskrn8.sys** in import section,
-now storahci.sys will import all storport functions only from Emu_Extender
-
+2) In storahci.sys replace string **storport.sys** to **storpor8.sys** in import section,
+now storahci.sys will import all storport functions only from storport Emu_Extender
 
 3) storahci.sys was compiled with Windows 8 DDK's storport.h and writes to new fields of _PORT_CONFIGURATION_INFORMATION,
 these fields not exist in Windows 7's storport.sys
@@ -185,3 +191,11 @@ same in asm code:
 For example msahci enumerates IDE/SATA channels as **Internal_IDE_Channel** and compatible ID as ***PNP0600**.
 Original mshdc.inf for ***PNP0600** will install wrong **"Standard IDE/ESDI Hard Disk Controller"** driver
 
+
+Intel RSTe AHCI/RAID driver 4.7.0.1098 for Windows XP/2003
+---------------------------
+
+1) In file iaStorA.sys replace string **storport.sys** to **storpor8.sys** in import section,
+now this *.sys will import all storport functions only from storport Emu_Extender
+
+2) Recalc checksum

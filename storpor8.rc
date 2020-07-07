@@ -7,9 +7,9 @@
 
 #define VER_FILETYPE                VFT_DRV
 #define VER_FILESUBTYPE             VFT2_DRV_SYSTEM
-#define VER_FILEDESCRIPTION_STR     "XP/W2003 ntoskrnl.exe Extender"
-#define VER_INTERNALNAME_STR        "ntoskrn8.sys"
-#define VER_ORIGINALFILENAME_STR    "ntoskrn8.sys"
+#define VER_FILEDESCRIPTION_STR     "Windows 7 storport.sys Extender"
+#define VER_INTERNALNAME_STR        "storpor8.sys"
+#define VER_ORIGINALFILENAME_STR    "storpor8.sys"
 #undef VER_LEGALCOPYRIGHT_STR
 #define VER_LEGALCOPYRIGHT_STR      "MOV AX, 0xDEAD"
 #define VER_LANGNEUTRAL

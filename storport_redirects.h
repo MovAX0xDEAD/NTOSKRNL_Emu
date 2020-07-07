@@ -1,25 +1,4 @@
 
-//  StorPortRegistryRead  (6 * 4)
-#define _StorPortRegistryRead
-#ifndef _AMD64_
- #pragma comment (linker, "/export:StorPortRegistryRead=_StorPortRegistryRead_k8@24")
-#else
- #pragma comment (linker, "/export:StorPortRegistryRead=StorPortRegistryRead_k8")
-#endif
-
-
-//  StorPortExtendedFunction (cdecl)
-#ifndef _AMD64_
- #pragma comment (linker, "/export:StorPortExtendedFunction=_StorPortExtendedFunction_k8")
-#else
- #pragma comment (linker, "/export:StorPortExtendedFunction=StorPortExtendedFunction_k8")
-#endif
-
-
-
-
-
-
 /////////////////////////////////////////
 ///      redirect if ...               //
 /////////////////////////////////////////
@@ -31,6 +10,7 @@
 ///        default redirect            //
 /////////////////////////////////////////
 
+/*
 #pragma comment (linker, "/export:ScsiPortMoveMemory=storport.ScsiPortMoveMemory")
 #pragma comment (linker, "/export:ScsiPortNotification=storport.ScsiPortNotification")
 #pragma comment (linker, "/export:StorPortAllocateRegistryBuffer=storport.StorPortAllocateRegistryBuffer")
@@ -51,7 +31,7 @@
 #pragma comment (linker, "/export:StorPortGetSrb=storport.StorPortGetSrb")
 #pragma comment (linker, "/export:StorPortGetUncachedExtension=storport.StorPortGetUncachedExtension")
 #pragma comment (linker, "/export:StorPortGetVirtualAddress=storport.StorPortGetVirtualAddress")
-#pragma comment (linker, "/export:StorPortInitialize=storport.StorPortInitialize")
+//#pragma comment (linker, "/export:StorPortInitialize=storport.StorPortInitialize")
 #pragma comment (linker, "/export:StorPortLogError=storport.StorPortLogError")
 #pragma comment (linker, "/export:StorPortMoveMemory=storport.StorPortMoveMemory")
 #pragma comment (linker, "/export:StorPortNotification=storport.StorPortNotification")
@@ -92,3 +72,4 @@
 #pragma comment (linker, "/export:StorPortWriteRegisterUchar=storport.StorPortWriteRegisterUchar")
 #pragma comment (linker, "/export:StorPortWriteRegisterUlong=storport.StorPortWriteRegisterUlong")
 #pragma comment (linker, "/export:StorPortWriteRegisterUshort=storport.StorPortWriteRegisterUshort")
+*/

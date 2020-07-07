@@ -3,6 +3,7 @@ USE_NOLIBS=1
 BUFFER_OVERFLOW_CHECKS=0
 
 USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
+# /P /Fiheaders/
 
 #MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /Oxtiy
 #!if $(386)
@@ -18,13 +19,14 @@ TARGETPATH=obj$(BUILD_ALT_DIR)
 
 # ntstrsafe need for _memcpy
 TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
-		$(DDK_LIB_PATH)\ntstrsafe.lib \
-		$(DDK_LIB_PATH)\storport.lib
+		$(DDK_LIB_PATH)\ntstrsafe.lib
 
-INCLUDES=	$(INCLUDES)
 
-SOURCES=	ntoskrn8.c \
-		storport.c \
-		ntoskrn8.rc
+SOURCES=	..\ntoskrn8.c  \
+		..\ntoskrn8.rc \
+		..\wrk2003.c   \
+                ..\common.c    \
+                ..\crt.c
+
 
 DLLDEF=$(OBJ_PATH)\$(O)\ntoskrn8.def

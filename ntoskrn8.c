@@ -1,19 +1,12 @@
 #undef    __STDC_WANT_SECURE_LIB__
 #define   __STDC_WANT_SECURE_LIB__ 0
 
-#include <stddef.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <memory.h>
-
 #include <ntddk.h> 
-#include <wdm.h>    // ntddk + wdm
-
 #include <Initguid.h>
 #include <devpkey.h>
 
-#include "wrk2003.h"
 #include "common.h"
+#include "wrk2003.h"
 
 
 typedef void                (*pVOID__VOID)            (void);
@@ -126,7 +119,7 @@ LONG            g_GuardedRegionCounter;
 
 
 void
-Initialize (void)
+Initialize (PUNICODE_STRING  RegistryPath)
 {
     KLOCK_QUEUE_HANDLE  LockHandle;
 
@@ -162,8 +155,7 @@ DllInitialize(                // Main entry
     }
      */
     
-    Initialize();
-    StorportInitialize();
+    Initialize(RegistryPath);
     return STATUS_SUCCESS;
 }
 
@@ -395,54 +387,6 @@ ZwAlpcSendWaitReceivePort_k8 (                // undocumented
 }
 
 
-errno_t __ALTDECL
-wcsncpy_s_k8 (                               // Wine
-    wchar_t* wcDest,
-    rsize_t numElement,
-    const wchar_t *wcSrc,
-    rsize_t count )
-{
-    #define MSVCRT_EINVAL    22
-    #define MSVCRT_ERANGE    34
-    #define MSVCRT_STRUNCATE 80
-    #define MSVCRT__TRUNCATE ((size_t)-1)
-
-    WCHAR *p = wcDest;
-    BOOLEAN truncate = (count == MSVCRT__TRUNCATE);
-
-    if(!wcDest && !numElement && !count)
-        return 0;
-
-    if (!wcDest || !numElement)
-        return MSVCRT_EINVAL;
-
-    if (!wcSrc)
-    {
-        *wcDest = 0;
-        return count ? MSVCRT_EINVAL : 0;
-    }
-
-    while (numElement && count && *wcSrc)
-    {
-        *p++ = *wcSrc++;
-        numElement--;
-        count--;
-    }
-    if (!numElement && truncate)
-    {
-        *(p-1) = 0;
-        return MSVCRT_STRUNCATE;
-    }
-    else if (!numElement)
-    {
-        *wcDest = 0;
-        return MSVCRT_ERANGE;
-    }
-
-    *p = 0;
-    return 0; 
-}
-
 
 BOOLEAN
 KdRefreshDebuggerNotPresent_k8 (void)
@@ -494,7 +438,7 @@ IoQueueWorkItemCompatible (
 {
     ULONG                   i;
     BOOLEAN                 foundContext = FALSE;
-    PIO_WORKITEM            IoWorkItem;
+    PIO_WORKITEM            IoWorkItem = NULL;
     KLOCK_QUEUE_HANDLE      LockHandle;
     PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx;
 
@@ -888,102 +832,6 @@ IoGetAffinityInterrupt_k8 (                     // RE iointex.lib
         IoGetAffinityInterrupt_k8(0,x)      )
 
 
-typedef enum _SYSTEM_INFORMATION_CLASS {
-    SystemBasicInformation,
-    SystemProcessorInformation,
-    SystemPerformanceInformation,
-    SystemTimeOfDayInformation,
-    SystemPathInformation,
-    SystemProcessInformation,
-    SystemCallCountInformation,
-    SystemDeviceInformation,
-    SystemProcessorPerformanceInformation,
-    SystemFlagsInformation,
-    SystemCallTimeInformation,
-    SystemModuleInformation,
-    SystemLocksInformation,
-    SystemStackTraceInformation,
-    SystemPagedPoolInformation,
-    SystemNonPagedPoolInformation,
-    SystemHandleInformation,
-    SystemObjectInformation,
-    SystemPageFileInformation,
-    SystemVdmInstemulInformation,
-    SystemVdmBopInformation,
-    SystemFileCacheInformation,
-    SystemPoolTagInformation,
-    SystemInterruptInformation,
-    SystemDpcBehaviorInformation,
-    SystemFullMemoryInformation,
-    SystemLoadGdiDriverInformation,
-    SystemUnloadGdiDriverInformation,
-    SystemTimeAdjustmentInformation,
-    SystemSummaryMemoryInformation,
-    SystemMirrorMemoryInformation,
-    SystemPerformanceTraceInformation,
-    SystemObsolete0,
-    SystemExceptionInformation,
-    SystemCrashDumpStateInformation,
-    SystemKernelDebuggerInformation,
-    SystemContextSwitchInformation,
-    SystemRegistryQuotaInformation,
-    SystemExtendServiceTableInformation,
-    SystemPrioritySeperation,
-    SystemVerifierAddDriverInformation,
-    SystemVerifierRemoveDriverInformation,
-    SystemProcessorIdleInformation,
-    SystemLegacyDriverInformation,
-    SystemCurrentTimeZoneInformation,
-    SystemLookasideInformation,
-    SystemTimeSlipNotification,
-    SystemSessionCreate,
-    SystemSessionDetach,
-    SystemSessionInformation,
-    SystemRangeStartInformation,
-    SystemVerifierInformation,
-    SystemVerifierThunkExtend,
-    SystemSessionProcessInformation,
-    SystemLoadGdiDriverInSystemSpace,
-    SystemNumaProcessorMap,
-    SystemPrefetcherInformation,
-    SystemExtendedProcessInformation,
-    SystemRecommendedSharedDataAlignment,
-    SystemComPlusPackage,
-    SystemNumaAvailableMemory,
-    SystemProcessorPowerInformation,
-    SystemEmulationBasicInformation,
-    SystemEmulationProcessorInformation,
-    SystemExtendedHandleInformation,
-    SystemLostDelayedWriteInformation,
-    SystemBigPoolInformation,
-    SystemSessionPoolTagInformation,
-    SystemSessionMappedViewInformation,
-    SystemHotpatchInformation,
-    SystemObjectSecurityMode,
-    SystemWatchdogTimerHandler,
-    SystemWatchdogTimerInformation,
-    SystemLogicalProcessorInformation,
-    SystemWow64SharedInformation,
-    SystemRegisterFirmwareTableInformationHandler,
-    SystemFirmwareTableInformation,
-    SystemModuleInformationEx,
-    SystemVerifierTriageInformation,
-    SystemSuperfetchInformation,
-    SystemMemoryListInformation,
-    SystemFileCacheInformationEx,
-    MaxSystemInfoClass
-} SYSTEM_INFORMATION_CLASS;
-
-
-NTSTATUS
-NtQuerySystemInformation (
-    SYSTEM_INFORMATION_CLASS SystemInformationClass,
-    PVOID                    SystemInformation,
-    ULONG                    SystemInformationLength,
-    PULONG                   ReturnLength
-    );
-
-
 NTSTATUS
 KeQueryLogicalProcessorRelationship_k8 (
     PPROCESSOR_NUMBER                           pProcessorNumber,
@@ -1022,7 +870,7 @@ KeQueryLogicalProcessorRelationship_k8 (
                                      65536 * sizeof(UCHAR),
                                      &Length);
     if (!Status) {
-        for (i = 0; i < (ULONG) Length/sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i++)
+        for (i = 0; i < Length/(ULONG)sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i++)
         {
             CurrentInfo=(SYSTEM_LOGICAL_PROCESSOR_INFORMATION *) &Buffer[i * sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION)];
             if (CurrentInfo->Relationship == RelationProcessorCore) {
@@ -1850,22 +1698,6 @@ PcwAddInstance_k8 (
     PPCW_DATA          Data )
 {
     return STATUS_SUCCESS;
-}
-
-
-BOOLEAN
-KeSetCoalescableTimer_k8 (
-    KTIMER         *Timer,
-    LARGE_INTEGER   DueTime,
-    ULONG           Period,
-    ULONG           TolerableDelay,
-    KDPC           *Dpc)
-{
-   return KeSetTimerEx(
-            Timer,
-            DueTime,
-            Period,
-            Dpc );     
 }
 
 

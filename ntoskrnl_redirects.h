@@ -242,6 +242,17 @@
 #endif      
 
 
+#endif
+///////////////////////////////////////////////////////////////
+//                     Windows 2003 x32                      //
+#if (NTDDI_VERSION <= NTDDI_WS03SP4) && !defined(_AMD64_)    //
+///////////////////////////////////////////////////////////////
+
+//  _chkstk = _alloca_probe
+#define _chkstk
+#pragma comment (linker, "/export:__chkstk=ntoskrnl._alloca_probe")
+
+
 
 
 #endif
@@ -590,13 +601,78 @@
 //                 <= NTDDI_W2008SP4   //
 /////////////////////////////////////////
 
-//	 wcsncpy_s     (FASTCALL CDECL)
+//	 wcsncpy_s     (CDECL)
 #define _wcsncpy_s
 #ifndef _AMD64_
  #pragma comment (linker, "/export:wcsncpy_s=_wcsncpy_s_k8")
 #else
  #pragma comment (linker, "/export:wcsncpy_s=wcsncpy_s_k8")
 #endif
+
+
+//	 wcsnlen     (CDECL)
+#define _wcsnlen
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcsnlen=_wcsnlen_k8")
+#else
+ #pragma comment (linker, "/export:wcsnlen=wcsnlen_k8")
+#endif
+
+
+//	 memcpy_s     (CDECL)
+#define _memcpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:memcpy_s=_memcpy_s_k8")
+#else
+ #pragma comment (linker, "/export:memcpy_s=memcpy_s_k8")
+#endif
+
+
+//	 strncpy_s     (CDECL)
+#define _strncpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strncpy_s=_strncpy_s_k8")
+#else
+ #pragma comment (linker, "/export:strncpy_s=strncpy_s_k8")
+#endif
+
+
+//	 strcpy_s     (CDECL)
+#define _strcpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strcpy_s=_strcpy_s_k8")
+#else
+ #pragma comment (linker, "/export:strcpy_s=strcpy_s_k8")
+#endif
+
+
+//	 sprintf_s     (CDECL)
+#define _sprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:sprintf_s=_sprintf_s_k8")
+#else
+ #pragma comment (linker, "/export:sprintf_s=sprintf_s_k8")
+#endif
+
+
+//	 vsprintf_s   (CDECL)
+#define _vsprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:vsprintf_s=_vsprintf_s_k8")
+#else
+ #pragma comment (linker, "/export:vsprintf_s=vsprintf_s_k8")
+#endif
+
+
+//	 strtok_s     (CDECL)
+#define _strtok_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strtok_s=_strtok_s_k8")
+#else
+ #pragma comment (linker, "/export:strtok_s=strtok_s_k8")
+#endif
+
+
 
 
 //	 KeGetProcessorIndexFromNumber     (PPROCESSOR_NUMBER)
@@ -1125,6 +1201,29 @@
 #ifndef _wcsncpy_s
  #pragma comment (linker, "/export:wcsncpy_s=ntoskrnl.wcsncpy_s")
 #endif
+#ifndef _wcsnlen
+ #pragma comment (linker, "/export:wcsnlen=ntoskrnl.wcsnlen")
+#endif
+#ifndef _memcpy_s
+ #pragma comment (linker, "/export:memcpy_s=ntoskrnl.memcpy_s")
+#endif
+#ifndef _strncpy_s
+ #pragma comment (linker, "/export:strncpy_s=ntoskrnl.strncpy_s")
+#endif
+#ifndef _strcpy_s
+ #pragma comment (linker, "/export:strcpy_s=ntoskrnl.strcpy_s")
+#endif
+#ifndef _sprintf_s
+ #pragma comment (linker, "/export:sprintf_s=ntoskrnl.sprintf_s")
+#endif
+#ifndef _vsprintf_s
+ #pragma comment (linker, "/export:vsprintf_s=ntoskrnl.vsprintf_s")
+#endif
+#ifndef _strtok_s
+ #pragma comment (linker, "/export:strtok_s=ntoskrnl.strtok_s")
+#endif
+
+
 #ifndef _KeGetProcessorIndexFromNumber
  #pragma comment (linker, "/export:KeGetProcessorIndexFromNumber=ntoskrnl.KeGetProcessorIndexFromNumber")
 #endif
@@ -1254,8 +1353,10 @@
 #ifndef _IoFreeSfioStreamIdentifier
  #pragma comment (linker, "/export:IoFreeSfioStreamIdentifier=ntoskrnl.IoFreeSfioStreamIdentifier")
 #endif
+#ifndef _chkstk
+ #pragma comment (linker, "/export:__chkstk=ntoskrnl._chkstk")
+#endif
 
-	
 
 
 
