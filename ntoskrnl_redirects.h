@@ -242,6 +242,15 @@
 #endif      
 
 
+//	 KeSetSystemAffinityThread (KAFFINITY)
+#define _KeSetSystemAffinityThread
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:KeSetSystemAffinityThread=_KeSetSystemAffinityThread_k8@4")
+#else
+ #pragma comment (linker, "/export:KeSetSystemAffinityThread=KeSetSystemAffinityThread_k8")
+#endif
+
+
 #endif
 ///////////////////////////////////////////////////////////////
 //                     Windows 2003 x32                      //
@@ -1585,7 +1594,6 @@
 #ifndef _SeSetAuditParameter
  #pragma comment (linker, "/export:SeSetAuditParameter=ntoskrnl.SeSetAuditParameter")
 #endif
-
 #ifndef __chkstk
  #pragma comment (linker, "/export:__chkstk=ntoskrnl._chkstk")
 #endif
@@ -1730,7 +1738,6 @@
 #ifndef _wcstoul
  #pragma comment (linker, "/export:wcstoul=ntoskrnl.wcstoul")
 #endif
-
 #ifndef _KeGetProcessorIndexFromNumber
  #pragma comment (linker, "/export:KeGetProcessorIndexFromNumber=ntoskrnl.KeGetProcessorIndexFromNumber")
 #endif
@@ -1872,7 +1879,9 @@
 #ifndef _ExSetFirmwareEnvironmentVariable
  #pragma comment (linker, "/export:ExSetFirmwareEnvironmentVariable=ntoskrnl.ExSetFirmwareEnvironmentVariable")
 #endif
-
+#ifndef _KeSetSystemAffinityThread
+ #pragma comment (linker, "/export:KeSetSystemAffinityThread=ntoskrnl.KeSetSystemAffinityThread")
+#endif
 
 
 /////////////////////////////////////////
@@ -2530,7 +2539,7 @@
 #pragma comment (linker, "/export:KeSetKernelStackSwapEnable=ntoskrnl.KeSetKernelStackSwapEnable")
 #pragma comment (linker, "/export:KeSetPriorityThread=ntoskrnl.KeSetPriorityThread")
 #pragma comment (linker, "/export:KeSetProfileIrql=ntoskrnl.KeSetProfileIrql")
-#pragma comment (linker, "/export:KeSetSystemAffinityThread=ntoskrnl.KeSetSystemAffinityThread")
+//#pragma comment (linker, "/export:KeSetSystemAffinityThread=ntoskrnl.KeSetSystemAffinityThread")
 #pragma comment (linker, "/export:KeSetTargetProcessorDpc=ntoskrnl.KeSetTargetProcessorDpc")
 #pragma comment (linker, "/export:KeSetTimeIncrement=ntoskrnl.KeSetTimeIncrement")
 #pragma comment (linker, "/export:KeSetTimer=ntoskrnl.KeSetTimer")

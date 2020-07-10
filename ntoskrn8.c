@@ -1948,6 +1948,26 @@ ExSetFirmwareEnvironmentVariable_k8 (
 }    
 
 
+void
+KeSetSystemAffinityThread_k8 (
+    KAFFINITY Affinity )
+
+// Windows XP KeSetSystemAffinityThread dont check Affinity for match with actual processors
+// Intel AHCI driver set affinity 0x111111110 even if OS have one-core CPU
+// TODO: check w2003 & x64 kernels   
+{
+    KAFFINITY AvailableAffinity;
+
+    AvailableAffinity = KeQueryActiveProcessors();
+    if ((Affinity & AvailableAffinity) == 0) { // bad requested affinity
+        Affinity = AvailableAffinity;
+    }
+
+    KeSetSystemAffinityThread(Affinity);
+}    
+
+
+
 
 NTSTATUS
 DriverEntry (                   // Dummy entry
@@ -1983,5 +2003,6 @@ DllUnload (void)
 
     return STATUS_SUCCESS;
 }
+
 
 #include "ntoskrnl_redirects.h"

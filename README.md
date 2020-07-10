@@ -217,7 +217,7 @@ now these *.sys will import kernel functions only from storport Emu\_Extender
 Intel RST AHCI/RAID drivers (any version, last compatible is 15.9.8.1050) for Windows XP/2003
 ---------------------------
 
-1) In file iaStorA.sys or iaStorAC.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section (do not change second string "**ntoskrnl.exe**")
+1) In file iaStorA.sys or iaStorAC.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section (do not change second string "**NTOSKRNL.exe**")
 now these *.sys will import kernel functions only from Emu\_Extender
 
 3) Recalc checksum
