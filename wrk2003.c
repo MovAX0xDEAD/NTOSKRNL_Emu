@@ -1266,8 +1266,6 @@ Return Value:
     PVOID FunctionAddress;
     PIMAGE_EXPORT_DIRECTORY ExportDirectory;
 
-    PAGED_CODE();
-
     ExportDirectory = (PIMAGE_EXPORT_DIRECTORY) RtlImageDirectoryEntryToData (
                                 DllBase,
                                 TRUE,

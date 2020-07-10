@@ -93,7 +93,7 @@ typedef enum _STORPORT_FUNCTION_CODE_W10 {
     ExtFunctionSetAdapterBusType,
     ExtFunctionPoFxRegisterPerfStates,
     ExtFunctionPoFxSetPerfState,
-    ExtFunctionGetD3ColdSupport,
+    ExtFunctionGetD3ColdSupport,                    // 67
     ExtFunctionInitializeRpmb,
     ExtFunctionAllocateHmb,
     ExtFunctionFreeHmb,
@@ -1251,8 +1251,9 @@ StorPortRegistryRead_k8 (
     PULONG BufferLength )
 {
     BOOLEAN status;
+    ULONG OldBufferLength;
 
-   if (gDumpMode)           // passthrough
+    if (gDumpMode)           // passthrough
         return gStorPortRegistryRead(
                         HwDeviceExtension,
                         ValueName,
@@ -1262,7 +1263,7 @@ StorPortRegistryRead_k8 (
                         BufferLength );
 
 
-    ULONG OldBufferLength = *BufferLength;
+    OldBufferLength = *BufferLength;
     FillBufferWithPattern(Buffer, *BufferLength);
     status = StorPortRegistryRead (
                         HwDeviceExtension,

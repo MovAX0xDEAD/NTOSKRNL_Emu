@@ -80,6 +80,11 @@ typedef struct _WorkerRoutineArray {
     PVOID                    Context;
 } WorkerRoutineArrayType;
 
+
+typedef struct _CreateProcessNotifyExArray {
+    PCREATE_PROCESS_NOTIFY_ROUTINE_EX  Routine;
+} CreateProcessNotifyExArrayType;
+
 typedef struct _RoutineAddress {
     UNICODE_STRING  RoutineName;
     PVOID           CallAddress;
@@ -104,15 +109,22 @@ XhciCompatibleIdList[] = {
 #define                 MAX_WorkerRoutineIndex  256
 WorkerRoutineArrayType  WorkerRoutineArray [MAX_WorkerRoutineIndex];
 
+#define                         MAX_CreateProcessNotifyEx  256
+CreateProcessNotifyExArrayType  CreateProcessNotifyExArray [MAX_CreateProcessNotifyEx];
+
 //pVOID                     g_pKeFlushQueuedDpcs            = NULL;
 //pfBOOLEAN__ULONG_ULONG    g_pExAcquireRundownProtectionEx = NULL;
 //pfULONG_ULONG             g_pExReleaseRundownProtectionEx = NULL;
 pVOID__VOID                 g_pKeRevertToUserAffinityThread = NULL;
 
 ULONG           g_LastUsedArray_Entry;
+ULONG           g_LastUsedCreateProcessNotifyExArray_Entry;
 KSPIN_LOCK      g_SpinWorkerRoutineArray;
+KSPIN_LOCK      g_SpinCreateProcessNotifyExArray;
 KIRQL           g_GuardedRegion_OldIrql;
 LONG            g_GuardedRegionCounter;
+//ULONG         g_CreateProcessNotifyRoutineExCount;
+
 
 // static writable
 //////////////////////////////////////////////////////////
@@ -123,47 +135,24 @@ Initialize (PUNICODE_STRING  RegistryPath)
 {
     KLOCK_QUEUE_HANDLE  LockHandle;
 
+    g_GuardedRegionCounter = 0;
+
     KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
     KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
     {
         g_LastUsedArray_Entry = 0;
         RtlZeroMemory(WorkerRoutineArray, sizeof(WorkerRoutineArray));
-        g_GuardedRegionCounter = 0;
     }
     KeReleaseInStackQueuedSpinLock(&LockHandle);
 
-}
-
-
-NTSTATUS
-DriverEntry(                // Dummy entry
-    PDRIVER_OBJECT DriverObject,
-    PUNICODE_STRING RegistryPath )
-{
-    return STATUS_SUCCESS;
-}
-
-
-NTSTATUS
-DllInitialize(                // Main entry
-    PUNICODE_STRING  RegistryPath )
-{
-     /*     // debug loop
-    __asm {
-        L1:
-        jmp L1
+    KeInitializeSpinLock(&g_SpinCreateProcessNotifyExArray);
+    KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
+    {
+        g_LastUsedCreateProcessNotifyExArray_Entry = 0;
+        RtlZeroMemory(CreateProcessNotifyExArray, sizeof(CreateProcessNotifyExArray));
     }
-     */
-    
-    Initialize(RegistryPath);
-    return STATUS_SUCCESS;
-}
+    KeReleaseInStackQueuedSpinLock(&LockHandle);
 
-
-NTSTATUS
-DllUnload (void)
-{
-    return STATUS_SUCCESS;
 }
 
 
@@ -1380,7 +1369,8 @@ PoUnregisterPowerSettingCallback_k8 (
 {
     return STATUS_SUCCESS;    
 }
- 
+
+typedef ULONG NODE_REQUIREMENT; 
 
 PVOID
 MmAllocateContiguousMemorySpecifyCacheNode_k8 (
@@ -1572,8 +1562,8 @@ PoEndDeviceBusy_k8 (
 
 // mark some routines for dynamic availablity
 const RoutineAddressType RoutineAddressEnabled[] = {    
-    { RTL_CONSTANT_STRING(L"IoConnectInterruptEx"),     &IoConnectInterruptEx_k8    }, // wdf01000.sys 1.11.9200
-    { RTL_CONSTANT_STRING(L"IoDisconnectInterruptEx"),  &IoDisconnectInterruptEx_k8 }, // wdf01000.sys 1.11.9200
+    { RTL_CONSTANT_STRING_k8(L"IoConnectInterruptEx"),     &IoConnectInterruptEx_k8    }, // wdf01000.sys 1.11.9200
+    { RTL_CONSTANT_STRING_k8(L"IoDisconnectInterruptEx"),  &IoDisconnectInterruptEx_k8 }, // wdf01000.sys 1.11.9200
 };
 
 
@@ -1774,5 +1764,224 @@ IoFreeSfioStreamIdentifier_k8 (
 }
 
 
+void
+Create_Process_Notify_Routine_XP (
+    HANDLE      ParentId,
+    HANDLE      ProcessId,
+    BOOLEAN     Create,
+    PEPROCESS   ProcessExit,      // EDI
+    PEPROCESS   ProcessCreate,    // EBX
+    PETHREAD    Thread )          // ESI
+{
+//                PspCreateThread x32 XP/2003
+// EBX - ProcessCreate
+// ESI - Thread
+
+//                PspExitProcess  x32 XP/2003
+// EDI - ProcessExit
+
+//                PspCreateThread x64 XP
+// R12 - Process
+// [rsp+80h] - Thread
+
+//                PspExitProcess  x64 XP
+// RSI - ProcessExit
+
+//                PspCreateThread x64 2003
+// R12 - Process
+// [rsp+80h] - Thread
+
+//                PspExitProcess  x64 2003
+// RSI - ProcessExit
+
+    ULONG                   i;
+    PS_CREATE_NOTIFY_INFO   CreateInfo;
+    PFILE_OBJECT            FileObject;
+    PCUNICODE_STRING        CommandLine;        
+    PCUNICODE_STRING        ImageFileName;
+
+    for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
+        if (CreateProcessNotifyExArray[i].Routine ==  NULL) // skip empty entry
+                continue;
+
+        if (Create == FALSE)                                // exit process
+                CreateProcessNotifyExArray[i].Routine(
+                                                ProcessExit,
+                                                ProcessId,
+                                                NULL);
+        else {                                              // create thread/process
+            CreateInfo.Size = sizeof(PS_CREATE_NOTIFY_INFO);
+            CreateInfo.CreationStatus = 0;
+            CreateInfo.Flags = 0;
+            CreateInfo.ParentProcessId = ParentId;
+            CreateInfo.CreatingThreadId.UniqueProcess = ProcessId;
+            CreateInfo.CreatingThreadId.UniqueThread = Thread->Cid.UniqueThread;
+
+            FileObject = ((PSECTION)ProcessCreate->SectionObject)->Segment->ControlArea->FilePointer;
+            CreateInfo.FileObject = FileObject;
+            CreateInfo.ImageFileName = &FileObject->FileName;
+            CreateInfo.FileOpenNameAvailable = FALSE;   // or TRUE ?
+            CreateInfo.CommandLine = NULL;
+
+            CreateProcessNotifyExArray[i].Routine(
+                                            ProcessCreate,
+                                            ProcessId,
+                                            &CreateInfo);
+
+            if (CreateInfo.CreationStatus < 0)
+            {
+                //TODO: PsTerminateProcess(ProcessCreate);
+                ;
+            }
+
+        }
+    }
+}
+
+
+NTSTATUS
+PsSetCreateProcessNotifyRoutineEx_k8 (
+    PCREATE_PROCESS_NOTIFY_ROUTINE_EX NotifyRoutine,
+    BOOLEAN Remove )
+{
+    ULONG               i;
+    BOOLEAN             foundFreeEntry = FALSE;
+    KLOCK_QUEUE_HANDLE  LockHandle;
+    NTSTATUS            status = STATUS_SUCCESS;
+
+    if (Remove ==  FALSE) { // Add new callback
+        KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
+        {
+            for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
+                if (CreateProcessNotifyExArray[i].Routine == NotifyRoutine) { // double record
+                    status = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+            }
+
+            if (status != STATUS_INVALID_PARAMETER) {
+                for (i = 0; i < MAX_CreateProcessNotifyEx; i++) {
+                    if (CreateProcessNotifyExArray[i].Routine == NULL) {
+                        foundFreeEntry = TRUE;
+
+                        if (i > g_LastUsedCreateProcessNotifyExArray_Entry)
+                                    g_LastUsedCreateProcessNotifyExArray_Entry = i;
+
+                        CreateProcessNotifyExArray[i].Routine = NotifyRoutine;
+                        //g_CreateProcessNotifyRoutineExCount++;
+                        break;
+                    }
+                }
+            }
+
+        }
+        KeReleaseInStackQueuedSpinLock(&LockHandle);
+
+    }
+    else {                  // remove callback
+        KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
+        {
+            for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
+                if (CreateProcessNotifyExArray[i].Routine == NotifyRoutine) {
+                        CreateProcessNotifyExArray[i].Routine = NULL;      // free entry
+
+                        if (g_LastUsedCreateProcessNotifyExArray_Entry == i && i > 0)
+                                g_LastUsedCreateProcessNotifyExArray_Entry--;
+
+                        //g_CreateProcessNotifyRoutineExCount--;                                
+                        break;
+                }
+            }
+        }
+        KeReleaseInStackQueuedSpinLock(&LockHandle);  
+    }
+    
+    return status; 
+}
+
+
+BOOLEAN
+RtlIsNtDdiVersionAvailable_k8 (
+    ULONG Version )
+{
+    ULONG MajorVersion;
+    ULONG MinorVersion;
+
+    if ((USHORT)Version != 0)
+        return FALSE;
+    else
+    {
+        PsGetVersion(
+            &MajorVersion,
+            &MinorVersion,
+            0,              // BuildNumber,
+            0);             // CSDVersion
+           
+        if (((MinorVersion + (MajorVersion << 8)) << 16) >= Version)
+            return TRUE;
+        else
+            return FALSE;
+    }
+}
+
+
+NTSTATUS
+ExGetFirmwareEnvironmentVariable_k8 (
+    PUNICODE_STRING VariableName,
+    LPGUID          VendorGuid,
+    PVOID           Value,
+    PULONG          ValueLength,
+    PULONG          Attributes )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}
+
+NTSTATUS
+ExSetFirmwareEnvironmentVariable_k8 (
+    PUNICODE_STRING VariableName,
+    LPGUID VendorGuid,
+    PVOID Value,
+    ULONG ValueLength,
+    ULONG Attributes )
+{
+    return STATUS_NOT_IMPLEMENTED;
+}    
+
+
+
+NTSTATUS
+DriverEntry (                   // Dummy entry
+    PDRIVER_OBJECT DriverObject,
+    PUNICODE_STRING RegistryPath )
+{
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS
+DllInitialize (                // Main entry
+    PUNICODE_STRING  RegistryPath )
+{
+     /*     // debug loop
+    __asm {
+        L1:
+        jmp L1
+    }
+     */
+    
+    Initialize(RegistryPath);
+    PsSetCreateProcessNotifyRoutine((PCREATE_PROCESS_NOTIFY_ROUTINE)&CREATE_PROCESS_NOTIFY_ROUTINE_asm, FALSE);
+
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS
+DllUnload (void)
+{
+    PsSetCreateProcessNotifyRoutine((PCREATE_PROCESS_NOTIFY_ROUTINE)&CREATE_PROCESS_NOTIFY_ROUTINE_asm, TRUE);
+
+    return STATUS_SUCCESS;
+}
 
 #include "ntoskrnl_redirects.h"

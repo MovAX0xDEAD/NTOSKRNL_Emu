@@ -5,7 +5,7 @@ BUFFER_OVERFLOW_CHECKS=0
 USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
 # /P /Fiheaders/
 
-#MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /Oxsy
+#MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /Oy-
 #!if $(386)
 #MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /arch:IA32 #disable sse
 #!endif
@@ -18,17 +18,14 @@ TARGETPATH=obj$(BUILD_ALT_DIR)
 
 
 # ntstrsafe need for _memcpy
-!if $(386)
 TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
 		$(DDK_LIB_PATH)\ntstrsafe.lib \
                 ..\ntoskrn8\$(O)\ntoskrn8.lib \
-                ..\i386\storport.lib 
 
-!else
-TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
-		$(DDK_LIB_PATH)\ntstrsafe.lib \
-                ..\ntoskrn8\$(O)\ntoskrn8.lib \
-                ..\amd64\storport.lib 
+!if $(386)
+TARGETLIBS=$(TARGETLIBS) ..\i386\storport.lib
+!elseif $(AMD64)
+TARGETLIBS=$(TARGETLIBS) ..\amd64\storport.lib
 !endif
 
 SOURCES=	..\storpor8.c  \

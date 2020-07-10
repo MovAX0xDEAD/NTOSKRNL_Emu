@@ -6,21 +6,9 @@
 #include "common.h"
 #include "wrk2003.h"
 
+#define NtQuery_BUFFERSIZE (100 * 1024) // 100KB/sizeof(RTL_PROCESS_MODULE_INFORMATION) 100*1024/284 = 360 max records
 
-BOOLEAN
-KeSetCoalescableTimer_k8 (
-    KTIMER         *Timer,
-    LARGE_INTEGER   DueTime,
-    ULONG           Period,
-    ULONG           TolerableDelay,
-    KDPC           *Dpc)
-{
-   return KeSetTimerEx(
-            Timer,
-            DueTime,
-            Period,
-            Dpc );     
-}
+uintptr_t __security_cookie = 0xDEADBEEF;
 
 const LARGE_INTEGER MmShortTime = {(ULONG)(-10 * 1000 * 10), -1}; // 10 milliseconds
 
@@ -67,7 +55,32 @@ typedef struct _KLDR_DATA_TABLE_ENTRY {
 } KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 
 
-#define NtQuery_BUFFERSIZE (100 * 1024) // 100KB/sizeof(RTL_PROCESS_MODULE_INFORMATION) 100*1024/284 = 360 max records
+#if defined(_X86_)
+void __fastcall
+#else
+void __cdecl
+#endif
+__security_check_cookie (uintptr_t _StackCookie)
+{
+    ;
+}
+
+
+BOOLEAN
+KeSetCoalescableTimer_k8 (
+    KTIMER         *Timer,
+    LARGE_INTEGER   DueTime,
+    ULONG           Period,
+    ULONG           TolerableDelay,
+    KDPC           *Dpc)
+{
+   return KeSetTimerEx(
+            Timer,
+            DueTime,
+            Period,
+            Dpc );     
+}
+
 
 PVOID
 GetRoutineAddress (

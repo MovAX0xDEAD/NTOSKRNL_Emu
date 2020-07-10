@@ -5,7 +5,7 @@ BUFFER_OVERFLOW_CHECKS=0
 USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
 # /P /Fiheaders/
 
-#MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /Oxtiy
+#MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /Oy-
 #!if $(386)
 #MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /arch:IA32 #disable sse
 #!endif
@@ -16,11 +16,14 @@ TARGETNAME=ntoskrn8
 TARGETTYPE=EXPORT_DRIVER
 TARGETPATH=obj$(BUILD_ALT_DIR)
 
-
-# ntstrsafe need for _memcpy
 TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
-		$(DDK_LIB_PATH)\ntstrsafe.lib
-
+		$(DDK_LIB_PATH)\ntstrsafe.lib 
+                
+!if $(386)
+TARGETLIBS=$(TARGETLIBS) ..\i386\safecrtnt.lib
+!elseif $(AMD64)
+TARGETLIBS=$(TARGETLIBS) ..\amd64\safecrtnt.lib
+!endif
 
 SOURCES=	..\ntoskrn8.c  \
 		..\ntoskrn8.rc \
@@ -28,5 +31,8 @@ SOURCES=	..\ntoskrn8.c  \
                 ..\common.c    \
                 ..\crt.c
 
+I386_SOURCES=   ..\ntoskrn8_helpers.asm
+
+AMD64_SOURCES=  ..\ntoskrn8_helpers.asm
 
 DLLDEF=$(OBJ_PATH)\$(O)\ntoskrn8.def

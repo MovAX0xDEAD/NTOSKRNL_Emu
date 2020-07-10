@@ -245,12 +245,12 @@
 #endif
 ///////////////////////////////////////////////////////////////
 //                     Windows 2003 x32                      //
-#if (NTDDI_VERSION <= NTDDI_WS03SP4) && !defined(_AMD64_)    //
+#if (NTDDI_VERSION <= NTDDI_WS03SP4) && defined(_X86_)       //
 ///////////////////////////////////////////////////////////////
 
-//  _chkstk = _alloca_probe
-#define _chkstk
-#pragma comment (linker, "/export:__chkstk=ntoskrnl._alloca_probe")
+//  _chkstk     (safecrtnt)
+#define __chkstk
+#pragma comment (linker, "/export:__chkstk=__chkstk")
 
 
 
@@ -592,6 +592,23 @@
 #endif
 
 
+//	 PsSetCreateProcessNotifyRoutineEx  (2 * 4)
+#define _PsSetCreateProcessNotifyRoutineEx
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:PsSetCreateProcessNotifyRoutineEx=_PsSetCreateProcessNotifyRoutineEx_k8@8")
+#else
+ #pragma comment (linker, "/export:PsSetCreateProcessNotifyRoutineEx=PsSetCreateProcessNotifyRoutineEx_k8")
+#endif
+
+
+//	 RtlIsNtDdiVersionAvailable  (1 * 4)
+#define _RtlIsNtDdiVersionAvailable
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:RtlIsNtDdiVersionAvailable=_RtlIsNtDdiVersionAvailable_k8@4")
+#else
+ #pragma comment (linker, "/export:RtlIsNtDdiVersionAvailable=RtlIsNtDdiVersionAvailable_k8")
+#endif
+
 
 
 #endif
@@ -601,78 +618,427 @@
 //                 <= NTDDI_W2008SP4   //
 /////////////////////////////////////////
 
-//	 wcsncpy_s     (CDECL)
-#define _wcsncpy_s
+
+//	 _i64toa_s      (safecrtnt)
+#define __i64toa_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:wcsncpy_s=_wcsncpy_s_k8")
+ #pragma comment (linker, "/export:__i64toa_s=__i64toa_s")
 #else
- #pragma comment (linker, "/export:wcsncpy_s=wcsncpy_s_k8")
+ #pragma comment (linker, "/export:__i64toa_s=_i64toa_s")
 #endif
 
 
-//	 wcsnlen     (CDECL)
-#define _wcsnlen
+//	 _i64tow_s      (safecrtnt)
+#define __i64tow_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:wcsnlen=_wcsnlen_k8")
+ #pragma comment (linker, "/export:__i64tow_s=__i64tow_s")
 #else
- #pragma comment (linker, "/export:wcsnlen=wcsnlen_k8")
+ #pragma comment (linker, "/export:__i64tow_s=_i64tow_s")
 #endif
 
 
-//	 memcpy_s     (CDECL)
+//	 _itoa_s      (safecrtnt)
+#define __itoa_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__itoa_s=__itoa_s")
+#else
+ #pragma comment (linker, "/export:__itoa_s=_itoa_s")
+#endif
+
+
+//	 _itow_s      (safecrtnt)
+#define __itow_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__itow_s=__itow_s")
+#else
+ #pragma comment (linker, "/export:__itow_s=_itow_s")
+#endif
+
+
+//	 _makepath_s      (safecrtnt)
+#define __makepath_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__makepath_s=__makepath_s")
+#else
+ #pragma comment (linker, "/export:__makepath_s=_makepath_s")
+#endif
+
+//	 _snprintf_s    (safecrtnt)
+#define __snprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__snprintf_s=__snprintf_s")
+#else
+ #pragma comment (linker, "/export:__snprintf_s=_snprintf_s")
+#endif
+
+
+//	 _snscanf_s      (safecrtnt)
+#define __snscanf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__snscanf_s=__snscanf_s")
+#else
+ #pragma comment (linker, "/export:__snscanf_s=_snscanf_s")
+#endif
+
+
+//	 _snwprintf_s      (safecrtnt)
+#define __snwprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__snwprintf_s=__snwprintf_s")
+#else
+ #pragma comment (linker, "/export:__snwprintf_s=_snwprintf_s")
+#endif
+
+
+//	 _snwscanf_s      (safecrtnt)
+#define __snwscanf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__snwscanf_s=__snwscanf_s")
+#else
+ #pragma comment (linker, "/export:__snwscanf_s=_snwscanf_s")
+#endif
+
+
+//	 _splitpath_s      (safecrtnt)
+#define __splitpath_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__splitpath_s=__splitpath_s")
+#else
+ #pragma comment (linker, "/export:__splitpath_s=_splitpath_s")
+#endif
+
+
+//	 _strnset_s      (safecrtnt)
+#define __strnset_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__strnset_s=__strnset_s")
+#else
+ #pragma comment (linker, "/export:__strnset_s=_strnset_s")
+#endif
+
+
+//	 _strset_s      (safecrtnt)
+#define __strset_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__strset_s=__strset_s")
+#else
+ #pragma comment (linker, "/export:__strset_s=_strset_s")
+#endif
+
+
+//	 _strtoui64      (safecrtnt)
+#define __strtoui64
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__strtoui64=__strtoui64")
+#else
+ #pragma comment (linker, "/export:__strtoui64=_strtoui64")
+#endif
+
+
+//	 _swprintf      (safecrtnt)
+#define __swprintf
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__swprintf=__swprintf")
+#else
+ #pragma comment (linker, "/export:__swprintf=_swprintf")
+#endif
+
+
+//	 _ui64toa_s      (safecrtnt)
+#define __ui64toa_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__ui64toa_s=__ui64toa_s")
+#else
+ #pragma comment (linker, "/export:__ui64toa_s=_ui64toa_s")
+#endif
+
+
+//	 _ui64tow_s      (safecrtnt)
+#define __ui64tow_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__ui64tow_s=__ui64tow_s")
+#else
+ #pragma comment (linker, "/export:__ui64tow_s=_ui64tow_s")
+#endif
+
+
+//	 _ultoa_s      (safecrtnt)
+#define __ultoa_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__ultoa_s=__ultoa_s")
+#else
+ #pragma comment (linker, "/export:__ultoa_s=_ultoa_s")
+#endif
+
+
+//	 _ultow_s      (safecrtnt)
+#define __ultow_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__ultow_s=__ultow_s")
+#else
+ #pragma comment (linker, "/export:__ultow_s=_ultow_s")
+#endif
+
+
+//	 _vsnprintf_s      (safecrtnt)
+#define __vsnprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__vsnprintf_s=__vsnprintf_s")
+#else
+ #pragma comment (linker, "/export:__vsnprintf_s=_vsnprintf_s")
+#endif
+
+
+//	 _vsnwprintf_s      (safecrtnt)
+#define __vsnwprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__vsnwprintf_s=__vsnwprintf_s")
+#else
+ #pragma comment (linker, "/export:__vsnwprintf_s=_vsnwprintf_s")
+#endif
+
+
+//	 _vswprintf      (safecrtnt)
+#define __vswprintf
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__vswprintf=__vswprintf")
+#else
+ #pragma comment (linker, "/export:__vswprintf=_vswprintf")
+#endif
+
+
+//	 _wcsnset_s      (safecrtnt)
+#define __wcsnset_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__wcsnset_s=__wcsnset_s")
+#else
+ #pragma comment (linker, "/export:__wcsnset_s=_wcsnset_s")
+#endif
+
+
+//	 _wcsset_s      (safecrtnt)
+#define __wcsset_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__wcsset_s=__wcsset_s")
+#else
+ #pragma comment (linker, "/export:__wcsset_s=_wcsset_s")
+#endif
+
+
+//	 _wmakepath_s      (safecrtnt)
+#define __wmakepath_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__wmakepath_s=__wmakepath_s")
+#else
+ #pragma comment (linker, "/export:__wmakepath_s=_wmakepath_s")
+#endif
+
+
+//	 _wsplitpath_s      (safecrtnt)
+#define __wsplitpath_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__wsplitpath_s=__wsplitpath_s")
+#else
+ #pragma comment (linker, "/export:__wsplitpath_s=_wsplitpath_s")
+#endif
+
+
+//	 _wtoi      (safecrtnt)
+#define __wtoi
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__wtoi=__wtoi")
+#else
+ #pragma comment (linker, "/export:__wtoi=_wtoi")
+#endif
+
+
+//	 _wtol      (safecrtnt)
+#define __wtol
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__wtol=__wtol")
+#else
+ #pragma comment (linker, "/export:__wtol=_wtol")
+#endif
+
+
+//	 memcpy_s       (safecrtnt)
 #define _memcpy_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:memcpy_s=_memcpy_s_k8")
+ #pragma comment (linker, "/export:memcpy_s=_memcpy_s")
 #else
- #pragma comment (linker, "/export:memcpy_s=memcpy_s_k8")
+ #pragma comment (linker, "/export:memcpy_s=memcpy_s")
 #endif
 
 
-//	 strncpy_s     (CDECL)
-#define _strncpy_s
+//	 memmove_s      (safecrtnt)
+#define _memmove_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:strncpy_s=_strncpy_s_k8")
+ #pragma comment (linker, "/export:memmove_s=_memmove_s")
 #else
- #pragma comment (linker, "/export:strncpy_s=strncpy_s_k8")
+ #pragma comment (linker, "/export:memmove_s=memmove_s")
 #endif
 
 
-//	 strcpy_s     (CDECL)
-#define _strcpy_s
-#ifndef _AMD64_
- #pragma comment (linker, "/export:strcpy_s=_strcpy_s_k8")
-#else
- #pragma comment (linker, "/export:strcpy_s=strcpy_s_k8")
-#endif
-
-
-//	 sprintf_s     (CDECL)
+//	 sprintf_s      (safecrtnt)
 #define _sprintf_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:sprintf_s=_sprintf_s_k8")
+ #pragma comment (linker, "/export:sprintf_s=_sprintf_s")
 #else
- #pragma comment (linker, "/export:sprintf_s=sprintf_s_k8")
+ #pragma comment (linker, "/export:sprintf_s=sprintf_s")
 #endif
 
 
-//	 vsprintf_s   (CDECL)
-#define _vsprintf_s
+//	 sscanf_s    (safecrtnt)
+#define _sscanf_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:vsprintf_s=_vsprintf_s_k8")
+ #pragma comment (linker, "/export:sscanf_s=_sscanf_s")
 #else
- #pragma comment (linker, "/export:vsprintf_s=vsprintf_s_k8")
+ #pragma comment (linker, "/export:sscanf_s=sscanf_s")
 #endif
 
 
-//	 strtok_s     (CDECL)
+//	 strcat_s      (safecrtnt)
+#define _strcat_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strcat_s=_strcat_s")
+#else
+ #pragma comment (linker, "/export:strcat_s=strcat_s")
+#endif
+
+
+//	 strcpy_s       (safecrtnt)
+#define _strcpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strcpy_s=_strcpy_s")
+#else
+ #pragma comment (linker, "/export:strcpy_s=strcpy_s")
+#endif
+
+
+//	 strncat_s      (safecrtnt)
+#define _strncat_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strncat_s=_strncat_s")
+#else
+ #pragma comment (linker, "/export:strncat_s=strncat_s")
+#endif
+
+
+//	 strncpy_s      (safecrtnt)
+#define _strncpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strncpy_s=_strncpy_s")
+#else
+ #pragma comment (linker, "/export:strncpy_s=strncpy_s")
+#endif
+
+
+//	 strnlen      (safecrtnt)
+#define _strnlen
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:strnlen=_strnlen")
+#else
+ #pragma comment (linker, "/export:strnlen=strnlen")
+#endif
+
+
+//	 strtok_s       (safecrtnt)
 #define _strtok_s
 #ifndef _AMD64_
- #pragma comment (linker, "/export:strtok_s=_strtok_s_k8")
+ #pragma comment (linker, "/export:strtok_s=_strtok_s")
 #else
- #pragma comment (linker, "/export:strtok_s=strtok_s_k8")
+ #pragma comment (linker, "/export:strtok_s=strtok_s")
 #endif
 
 
+//	 swprintf_s      (safecrtnt)
+#define _swprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:swprintf_s=_swprintf_s")
+#else
+ #pragma comment (linker, "/export:swprintf_s=swprintf_s")
+#endif
+
+
+//	 swscanf_s      (safecrtnt)
+#define _swscanf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:swscanf_s=_swscanf_s")
+#else
+ #pragma comment (linker, "/export:swscanf_s=swscanf_s")
+#endif
+
+
+//	 vsprintf_s     (safecrtnt)
+#define _vsprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:vsprintf_s=_vsprintf_s")
+#else
+ #pragma comment (linker, "/export:vsprintf_s=vsprintf_s")
+#endif
+
+
+//	 vswprintf_s      (safecrtnt)
+#define _vswprintf_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:vswprintf_s=_vswprintf_s")
+#else
+ #pragma comment (linker, "/export:vswprintf_s=vswprintf_s")
+#endif
+
+
+//	 wcscat_s      (safecrtnt)
+#define _wcscat_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcscat_s=_wcscat_s")
+#else
+ #pragma comment (linker, "/export:wcscat_s=wcscat_s")
+#endif
+
+
+//	 wcscpy_s      (safecrtnt)
+#define _wcscpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcscpy_s=_wcscpy_s")
+#else
+ #pragma comment (linker, "/export:wcscpy_s=wcscpy_s")
+#endif
+
+
+//	 wcsncat_s      (safecrtnt)
+#define _wcsncat_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcsncat_s=_wcsncat_s")
+#else
+ #pragma comment (linker, "/export:wcsncat_s=wcsncat_s")
+#endif
+
+
+//	 wcsncpy_s      (safecrtnt)
+#define _wcsncpy_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcsncpy_s=_wcsncpy_s")
+#else
+ #pragma comment (linker, "/export:wcsncpy_s=wcsncpy_s")
+#endif
+
+
+//	 wcsnlen        (safecrtnt)
+#define _wcsnlen
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcsnlen=_wcsnlen")
+#else
+ #pragma comment (linker, "/export:wcsnlen=wcsnlen")
+#endif
+
+
+//	 wcstoul      (safecrtnt)
+#define _wcstoul
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:wcstoul=_wcstoul")
+#else
+ #pragma comment (linker, "/export:wcstoul=wcstoul")
+#endif
 
 
 //	 KeGetProcessorIndexFromNumber     (PPROCESSOR_NUMBER)
@@ -956,6 +1322,7 @@
 #endif
 
 
+
 #endif
 /////////////////////////////////////////
 //           Windows 7                 //
@@ -1010,6 +1377,26 @@
 #else
  #pragma comment (linker, "/export:MmAllocateContiguousNodeMemory=MmAllocateContiguousNodeMemory_k8")
 #endif
+
+
+//	 ExGetFirmwareEnvironmentVariable              (5 * 4)
+#define _ExGetFirmwareEnvironmentVariable
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:ExGetFirmwareEnvironmentVariable=_ExGetFirmwareEnvironmentVariable_k8@20")
+#else
+ #pragma comment (linker, "/export:ExGetFirmwareEnvironmentVariable=ExGetFirmwareEnvironmentVariable_k8")
+#endif
+
+
+//	 ExSetFirmwareEnvironmentVariable              (5 * 4)
+#define _ExSetFirmwareEnvironmentVariable
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:ExSetFirmwareEnvironmentVariable=_ExSetFirmwareEnvironmentVariable_k8@20")
+#else
+ #pragma comment (linker, "/export:ExSetFirmwareEnvironmentVariable=ExSetFirmwareEnvironmentVariable_k8")
+#endif
+
+
 
 
 
@@ -1198,31 +1585,151 @@
 #ifndef _SeSetAuditParameter
  #pragma comment (linker, "/export:SeSetAuditParameter=ntoskrnl.SeSetAuditParameter")
 #endif
+
+#ifndef __chkstk
+ #pragma comment (linker, "/export:__chkstk=ntoskrnl._chkstk")
+#endif
+#ifndef __i64toa_s
+ #pragma comment (linker, "/export:__i64toa_s=ntoskrnl._i64toa_s")
+#endif
+#ifndef __i64tow_s
+ #pragma comment (linker, "/export:__i64tow_s=ntoskrnl._i64tow_s")
+#endif
+#ifndef __itoa_s
+ #pragma comment (linker, "/export:__itoa_s=ntoskrnl._itoa_s")
+#endif
+#ifndef __itow_s
+ #pragma comment (linker, "/export:__itow_s=ntoskrnl._itow_s")
+#endif
+#ifndef __makepath_s
+ #pragma comment (linker, "/export:__makepath_s=ntoskrnl._makepath_s")
+#endif
+#ifndef __snprintf_s
+ #pragma comment (linker, "/export:__snprintf_s=ntoskrnl._snprintf_s")
+#endif
+#ifndef __snscanf_s
+ #pragma comment (linker, "/export:__snscanf_s=ntoskrnl._snscanf_s")
+#endif
+#ifndef __snwprintf_s
+ #pragma comment (linker, "/export:__snwprintf_s=ntoskrnl._snwprintf_s")
+#endif
+#ifndef __snwscanf_s
+ #pragma comment (linker, "/export:__snwscanf_s=ntoskrnl._snwscanf_s")
+#endif
+#ifndef __splitpath_s
+ #pragma comment (linker, "/export:__splitpath_s=ntoskrnl._splitpath_s")
+#endif
+#ifndef __strnset_s
+ #pragma comment (linker, "/export:__strnset_s=ntoskrnl._strnset_s")
+#endif
+#ifndef __strset_s
+ #pragma comment (linker, "/export:__strset_s=ntoskrnl._strset_s")
+#endif
+#ifndef __strtoui64
+ #pragma comment (linker, "/export:__strtoui64=ntoskrnl._strtoui64")
+#endif
+#ifndef __swprintf
+ #pragma comment (linker, "/export:__swprintf=ntoskrnl._swprintf")
+#endif
+#ifndef __ui64toa_s
+ #pragma comment (linker, "/export:__ui64toa_s=ntoskrnl._ui64toa_s")
+#endif
+#ifndef __ui64tow_s
+ #pragma comment (linker, "/export:__ui64tow_s=ntoskrnl._ui64tow_s")
+#endif
+#ifndef __ultoa_s
+ #pragma comment (linker, "/export:__ultoa_s=ntoskrnl._ultoa_s")
+#endif
+#ifndef __ultow_s
+ #pragma comment (linker, "/export:__ultow_s=ntoskrnl._ultow_s")
+#endif
+#ifndef __vsnprintf_s
+ #pragma comment (linker, "/export:__vsnprintf_s=ntoskrnl._vsnprintf_s")
+#endif
+#ifndef __vsnwprintf_s
+ #pragma comment (linker, "/export:__vsnwprintf_s=ntoskrnl._vsnwprintf_s")
+#endif
+#ifndef __vswprintf
+ #pragma comment (linker, "/export:__vswprintf=ntoskrnl._vswprintf")
+#endif
+#ifndef __wcsnset_s
+ #pragma comment (linker, "/export:__wcsnset_s=ntoskrnl._wcsnset_s")
+#endif
+#ifndef __wcsset_s
+ #pragma comment (linker, "/export:__wcsset_s=ntoskrnl._wcsset_s")
+#endif
+#ifndef __wmakepath_s
+ #pragma comment (linker, "/export:__wmakepath_s=ntoskrnl._wmakepath_s")
+#endif
+#ifndef __wsplitpath_s
+ #pragma comment (linker, "/export:__wsplitpath_s=ntoskrnl._wsplitpath_s")
+#endif
+#ifndef __wtoi
+ #pragma comment (linker, "/export:__wtoi=ntoskrnl._wtoi")
+#endif
+#ifndef __wtol
+ #pragma comment (linker, "/export:__wtol=ntoskrnl._wtol")
+#endif
+#ifndef _memcpy_s
+ #pragma comment (linker, "/export:memcpy_s=ntoskrnl.memcpy_s")
+#endif
+#ifndef _memmove_s
+ #pragma comment (linker, "/export:memmove_s=ntoskrnl.memmove_s")
+#endif
+#ifndef _sprintf_s
+ #pragma comment (linker, "/export:sprintf_s=ntoskrnl.sprintf_s")
+#endif
+#ifndef _sscanf_s
+ #pragma comment (linker, "/export:sscanf_s=ntoskrnl.sscanf_s")
+#endif
+#ifndef _strcat_s
+ #pragma comment (linker, "/export:strcat_s=ntoskrnl.strcat_s")
+#endif
+#ifndef _strcpy_s
+ #pragma comment (linker, "/export:strcpy_s=ntoskrnl.strcpy_s")
+#endif
+#ifndef _strncat_s
+ #pragma comment (linker, "/export:strncat_s=ntoskrnl.strncat_s")
+#endif
+#ifndef _strncpy_s
+ #pragma comment (linker, "/export:strncpy_s=ntoskrnl.strncpy_s")
+#endif
+#ifndef _strnlen
+ #pragma comment (linker, "/export:strnlen=ntoskrnl.strnlen")
+#endif
+#ifndef _strtok_s
+ #pragma comment (linker, "/export:strtok_s=ntoskrnl.strtok_s")
+#endif
+#ifndef _swprintf_s
+ #pragma comment (linker, "/export:swprintf_s=ntoskrnl.swprintf_s")
+#endif
+#ifndef _swscanf_s
+ #pragma comment (linker, "/export:swscanf_s=ntoskrnl.swscanf_s")
+#endif
+#ifndef _vsprintf_s
+ #pragma comment (linker, "/export:vsprintf_s=ntoskrnl.vsprintf_s")
+#endif
+#ifndef _vswprintf_s
+ #pragma comment (linker, "/export:vswprintf_s=ntoskrnl.vswprintf_s")
+#endif
+#ifndef _wcscat_s
+ #pragma comment (linker, "/export:wcscat_s=ntoskrnl.wcscat_s")
+#endif
+#ifndef _wcscpy_s
+ #pragma comment (linker, "/export:wcscpy_s=ntoskrnl.wcscpy_s")
+#endif
+#ifndef _wcsncat_s
+ #pragma comment (linker, "/export:wcsncat_s=ntoskrnl.wcsncat_s")
+#endif
 #ifndef _wcsncpy_s
  #pragma comment (linker, "/export:wcsncpy_s=ntoskrnl.wcsncpy_s")
 #endif
 #ifndef _wcsnlen
  #pragma comment (linker, "/export:wcsnlen=ntoskrnl.wcsnlen")
 #endif
-#ifndef _memcpy_s
- #pragma comment (linker, "/export:memcpy_s=ntoskrnl.memcpy_s")
+#ifndef _wcstoul
+ #pragma comment (linker, "/export:wcstoul=ntoskrnl.wcstoul")
 #endif
-#ifndef _strncpy_s
- #pragma comment (linker, "/export:strncpy_s=ntoskrnl.strncpy_s")
-#endif
-#ifndef _strcpy_s
- #pragma comment (linker, "/export:strcpy_s=ntoskrnl.strcpy_s")
-#endif
-#ifndef _sprintf_s
- #pragma comment (linker, "/export:sprintf_s=ntoskrnl.sprintf_s")
-#endif
-#ifndef _vsprintf_s
- #pragma comment (linker, "/export:vsprintf_s=ntoskrnl.vsprintf_s")
-#endif
-#ifndef _strtok_s
- #pragma comment (linker, "/export:strtok_s=ntoskrnl.strtok_s")
-#endif
-
 
 #ifndef _KeGetProcessorIndexFromNumber
  #pragma comment (linker, "/export:KeGetProcessorIndexFromNumber=ntoskrnl.KeGetProcessorIndexFromNumber")
@@ -1353,10 +1860,18 @@
 #ifndef _IoFreeSfioStreamIdentifier
  #pragma comment (linker, "/export:IoFreeSfioStreamIdentifier=ntoskrnl.IoFreeSfioStreamIdentifier")
 #endif
-#ifndef _chkstk
- #pragma comment (linker, "/export:__chkstk=ntoskrnl._chkstk")
+#ifndef _PsSetCreateProcessNotifyRoutineEx
+ #pragma comment (linker, "/export:PsSetCreateProcessNotifyRoutineEx=ntoskrnl.PsSetCreateProcessNotifyRoutineEx")
 #endif
-
+#ifndef _RtlIsNtDdiVersionAvailable
+ #pragma comment (linker, "/export:RtlIsNtDdiVersionAvailable=ntoskrnl.RtlIsNtDdiVersionAvailable")
+#endif
+#ifndef _ExGetFirmwareEnvironmentVariable
+ #pragma comment (linker, "/export:ExGetFirmwareEnvironmentVariable=ntoskrnl.ExGetFirmwareEnvironmentVariable")
+#endif
+#ifndef _ExSetFirmwareEnvironmentVariable
+ #pragma comment (linker, "/export:ExSetFirmwareEnvironmentVariable=ntoskrnl.ExSetFirmwareEnvironmentVariable")
+#endif
 
 
 
