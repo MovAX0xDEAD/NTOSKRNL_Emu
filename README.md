@@ -19,13 +19,13 @@ Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work 
 2. Original DDK header files has mistake with definintion of MmAllocateContiguousMemorySpecifyCacheNode, apply fix
  to two files **\WinDDK\Win7\inc\ddk\ntddk.h** and **\WinDDK\Win7\inc\ddk\wdm.h**:
 
-```c
+```
        #if (NTDDI_VERSION >= NTDDI_WIN2K)
        typedef ULONG NODE_REQUIREMENT;
 ```
 to:
 
-```c
+```
        #if (NTDDI_VERSION >= NTDDI_VISTA)
        typedef ULONG NODE_REQUIREMENT;
 ```
@@ -178,7 +178,7 @@ now storahci.sys will import storport functions only from storport Emu\_Extender
    Replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
 
 If you compile storahci from sources (from Windows 8 DDK Samples), comment two lines:
-```c
+```
        ConfigInfo->BusResetHoldTime = 0;
        ConfigInfo->FeatureSupport |= STOR_ADAPTER_FEATURE_STOP_UNIT_DURING_POWER_DOWN;
 ```
