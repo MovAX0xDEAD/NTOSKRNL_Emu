@@ -1,5 +1,4 @@
-NTOSKRNL Emu\_Extender
-===========================
+# NTOSKRNL Emu\_Extender #
 Library of missing functions for Windows XP/2003/Vista/7 NTOSKRNL.EXE
 
 Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work with Windows XP/2003/Vista/7
@@ -39,8 +38,8 @@ to:
  system the way of exporting the functions changes,
 if a function already exists in the kernel it will be simply redirected without injecting emulation code
 
-5. Run shell: "Start Menu\Programs\Windows Driver Kits\Win7 7600.16385.1\Build Environments\Windows XXX\YYY Free Build"
- Environment. (**XXX** - target OS, **YYY** - target CPU) 
+5. Run shell: "*Start Menu\Programs\Windows Driver Kits\Win7 7600.16385.1\Build Environments\Windows XXX\YYY Free Build  Environment*"
+   (**XXX** - target OS, **YYY** - target CPU) 
 
 6. In shell change current directory to local project folder
 
@@ -49,8 +48,8 @@ if a function already exists in the kernel it will be simply redirected without 
 8. Compiled ntoskrn8.sys will be in **ntoskrn8/objfre\_XXX\_x86/YYY** folder
 
 
-STORPORT Windows 7 Emu\_Extender
-===========================
+
+# STORPORT Windows 7 Emu\_Extender #
 This is Library of missing functions for Windows 7 STORPORT.SYS to emulate Windows 8 STORPORT.SYS
 
 **How-To:**
@@ -59,11 +58,9 @@ This is Library of missing functions for Windows 7 STORPORT.SYS to emulate Windo
 3) Make corrections to target xxx.sys so that it loads **storpor8.sys** instead of the original **storport.sys**
 
 
+# Ported drivers: #
 
-Ported drivers:
-===========================
-
-###WDF 1.11 for Windows XP/2003 x32###
+## WDF 1.11 for Windows XP/2003 x32 ##
 
 Last version for Windows XP/2003 is 1.9, but possible to backport 1.11 version:
 1) Get files from Windows 7 Updates (KB3125574):
@@ -97,7 +94,7 @@ If need coexist with original WDF1.9 drivers:
        LoadOrderGroup = Base
 ```
 
-###Windows 7's Storport.sys for Windows XP x32###
+## Windows 7's Storport.sys for Windows XP x32 ##
 
 Storport was released starting from Windows 2003, but possible to backport Windows 7 version:
 1) Get files from Windows 7 Updates (KB3125574):
@@ -114,7 +111,7 @@ now storport.sys will import kernel functions only from Emu_Extender
 4) Recalc checksum
 
 
-###Windows 7's NVMe driver for Windows XP x32###
+## Windows 7's NVMe driver for Windows XP x32 ##
 
 1) Get files from Windows 7 Updates (KB3125574):
 
@@ -123,34 +120,33 @@ now storport.sys will import kernel functions only from Emu_Extender
 2) MS Windows 7 NVMe driver require storport.sys from Windows 7, use backported one
 
 
-###Windows 8's USB3 driver for Windows XP x32###
+## Windows 8's USB3 driver for Windows XP x32 ##
 
 1) Get required files from Windows 8 (KB4534283/4556840, KB2984005, RTM ISO):
 
-       ucx01000.sys	v6.2.9200.22453
-       usbhub3.sys	v6.2.9200.21180
-       usbxhci.sys	v6.2.9200.22099
-       wpprecorder.sys	v6.2.9200.16384
-       usbd.sys		v6.2.9200.20761
+       ucx01000.sys         v6.2.9200.22453
+       usbhub3.sys          v6.2.9200.21180
+       usbxhci.sys          v6.2.9200.22099
+       wpprecorder.sys      v6.2.9200.16384
+       usbd.sys             v6.2.9200.20761
 
 from Vista Beta/Longhorn 5456.5:
 
-       ksecdd.sys	v6.0.5456.5
+       ksecdd.sys           v6.0.5456.5
 
 2) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, wpprecorder.sys, usbd.sys change **security_cookie** to random value
-3) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, ksecdd.sys replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**"
- in import section, now \*.sys will import kernel functions only from Emu\_Extender
+3) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, ksecdd.sys replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section, now \*.sys will import kernel functions only from Emu\_Extender
 4) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**
 5) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
 6) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section,
 7) Recalc checksum
 
 
-###Windows 8's STORAHCI driver for Windows XP x32###
+## Windows 8's STORAHCI driver for Windows XP x32 ##
 
 STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys from Windows 7
 
-Storport.sys from Windows 7 more compatible with Windows Xp/2003 because it still call required PoStartNextPowerIrp
+Storport.sys from Windows 7 more compatible with Windows Xp/2003 because it still call required *PoStartNextPowerIrp*
 when processing power IRPs. MS removed calls to PoStartNextPowerIrp in Windows 8's storport.sys, without this call
 Windows XP/2003 kernel cannot finish current power IRP and start next IRP, also it generate BSOD (0x0000009F).
 
@@ -170,7 +166,7 @@ Win8's STORAHCI + Win7's STORPORT have **significal performance drop and high CP
 now storahci.sys will import storport functions only from storport Emu\_Extender
 
 3) Storahci.sys was compiled with Windows 8 DDK's storport.h and writes values to new fields of
- **\_PORT\_CONFIGURATION\_INFORMATION** struct, these fields not exist in Windows 7's storport.sys. Need to skip these
+ *\_PORT\_CONFIGURATION\_INFORMATION* struct, these fields not exist in Windows 7's storport.sys. Need to skip these
  writes to avoid damaging structures in memory:
 
    Replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
@@ -188,7 +184,7 @@ If you compile storahci from sources (from Windows 8 DDK Samples), comment two l
 
 
 
-###Windows 7's MSAHCI driver for Windows XP x32###
+## Windows 7's MSAHCI driver for Windows XP x32 ##
 
 1) Get files from Windows 7 Updates (KB3125574):
 
@@ -220,9 +216,8 @@ Original mshdc.inf for "\*PNP0600" will install wrong **"Standard IDE/ESDI Hard 
 
 
 
-
-###Intel RSTe Enterprise AHCI/RAID driver 4.7.0.1098 for Windows XP/2003 +###
-###Intel RST AHCI/RAID driver (v 11.x-15.x, last compatible 15.9.8/15.44.0) for Windows XP/2003###
+## Intel RSTe Enterprise AHCI/RAID driver 4.7.0.1098 for Windows XP/2003 + ##
+## Intel RST AHCI/RAID driver (v 11.x-15.x, last compatible 15.9.8/15.44.0) for Windows XP/2003 ##
 
 These drivers require storport.sys from Windows 7, use backported one 
 
