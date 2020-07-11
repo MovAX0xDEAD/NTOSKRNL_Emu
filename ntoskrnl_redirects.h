@@ -664,6 +664,24 @@
 #endif
 
 
+//	 _ltoa_s      (safecrtnt)
+#define __ltoa_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__ltoa_s=__ltoa_s")
+#else
+ #pragma comment (linker, "/export:__ltoa_s=_ltoa_s")
+#endif
+
+
+//	 _ltow_s      (safecrtnt)
+#define __ltow_s
+#ifndef _AMD64_
+ #pragma comment (linker, "/export:__ltow_s=__ltow_s")
+#else
+ #pragma comment (linker, "/export:__ltow_s=_ltow_s")
+#endif
+
+
 //	 _makepath_s      (safecrtnt)
 #define __makepath_s
 #ifndef _AMD64_
@@ -1608,6 +1626,12 @@
 #endif
 #ifndef __itow_s
  #pragma comment (linker, "/export:__itow_s=ntoskrnl._itow_s")
+#endif
+#ifndef __ltoa_s
+ #pragma comment (linker, "/export:__ltoa_s=ntoskrnl._ltoa_s")
+#endif
+#ifndef __ltow_s
+ #pragma comment (linker, "/export:__ltow_s=ntoskrnl._ltow_s")
 #endif
 #ifndef __makepath_s
  #pragma comment (linker, "/export:__makepath_s=ntoskrnl._makepath_s")
