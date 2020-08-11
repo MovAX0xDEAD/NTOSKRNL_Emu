@@ -91,6 +91,27 @@ typedef struct _RoutineAddress {
 } RoutineAddressType;
 
 
+#define CLEANUP_ENTRY(Array,Field,ComparedValue,LastUsed_Entry)                \
+for (CLEANUP_Index = 0; CLEANUP_Index <= LastUsed_Entry; CLEANUP_Index++) {    \
+    if (Array[CLEANUP_Index].Field == ComparedValue)                           \
+    {                                                                          \
+        Array[CLEANUP_Index].Field = NULL;                                     \
+	    if (CLEANUP_Index==LastUsed_Entry && LastUsed_Entry > 0) {             \
+            LastUsed_Entry--;                                                  \
+            for (CLEANUP_RevIndex=LastUsed_Entry; CLEANUP_RevIndex > 0; CLEANUP_RevIndex--) {  \
+                if (Array[CLEANUP_RevIndex].Field == NULL)                     \
+                    LastUsed_Entry= CLEANUP_RevIndex-1;                        \
+                else                                                           \
+                    break;                                                     \
+            }                                                                  \
+        }                                                                      \
+                                                                               \
+        break;                                                                 \
+     }                                                                         \
+}
+
+
+
 DEFINE_GUID(DUMMYGUID, 
 0xDEADBEEF, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
@@ -117,13 +138,12 @@ CreateProcessNotifyExArrayType  CreateProcessNotifyExArray [MAX_CreateProcessNot
 //pfULONG_ULONG             g_pExReleaseRundownProtectionEx = NULL;
 pVOID__VOID                 g_pKeRevertToUserAffinityThread = NULL;
 
-ULONG           g_LastUsedArray_Entry;
+ULONG           g_LastUsedWorkerRoutineArray_Entry;
 ULONG           g_LastUsedCreateProcessNotifyExArray_Entry;
 KSPIN_LOCK      g_SpinWorkerRoutineArray;
 KSPIN_LOCK      g_SpinCreateProcessNotifyExArray;
 KIRQL           g_GuardedRegion_OldIrql;
 LONG            g_GuardedRegionCounter;
-//ULONG         g_CreateProcessNotifyRoutineExCount;
 
 
 // static writable
@@ -140,7 +160,7 @@ Initialize (PUNICODE_STRING  RegistryPath)
     KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
     KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
     {
-        g_LastUsedArray_Entry = 0;
+        g_LastUsedWorkerRoutineArray_Entry = 0;
         RtlZeroMemory(WorkerRoutineArray, sizeof(WorkerRoutineArray));
     }
     KeReleaseInStackQueuedSpinLock(&LockHandle);
@@ -169,7 +189,7 @@ KeFlushQueuedDpcs_k8 (void)    // WinXP RTM, SP1
     KAFFINITY CurrentAffinity =  ActiveProcessors & ~((KAFFINITY) 1 << CurrentProcessor);
     if (CurrentAffinity) {
         do {
-            KeSetSystemAffinityThread(CurrentAffinity);
+            KeSetSystemAffinityThread_k8(CurrentAffinity);
             CurrentAffinity &= ~((KAFFINITY) 1 << CurrentProcessor);
         }
         while (CurrentAffinity);
@@ -433,15 +453,18 @@ IoQueueWorkItemCompatible (
 
     KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
     {
-        for (i = 0; i <= g_LastUsedArray_Entry; i++) {
+        for (i = 0; i <= g_LastUsedWorkerRoutineArray_Entry; i++) {
             if (WorkerRoutineArray[i].IoWorkItem != NULL &&
-                WorkerRoutineArray[i].Context == Context ) {         // match by context
+                WorkerRoutineArray[i].Context == Context ) {         // match by Context
                     foundContext    = TRUE;
                     IoWorkItem      = WorkerRoutineArray[i].IoWorkItem;
                     WorkerRoutineEx = WorkerRoutineArray[i].WorkerRoutineEx;
+
                     WorkerRoutineArray[i].IoWorkItem = NULL;        // free entry
-                    if (g_LastUsedArray_Entry == i && i > 0)
-                            g_LastUsedArray_Entry--;
+                    
+                    // shrink WorkerRoutineArray if possible
+                    if (i == g_LastUsedWorkerRoutineArray_Entry && g_LastUsedWorkerRoutineArray_Entry > 0)
+                            g_LastUsedWorkerRoutineArray_Entry--;
                     break;
             }
         }
@@ -451,7 +474,7 @@ IoQueueWorkItemCompatible (
     if (foundContext)
         WorkerRoutineEx(DeviceObject, Context, IoWorkItem);
     else {
-        DbgPrint("IoQueueWork Context not found");
+        DbgPrint("ntoskrn8: IoQueueWork Context not found");
         KeBugCheckEx(0xDEADBEEF, 0x0, (ULONG_PTR)Context, (ULONG_PTR)DeviceObject,  0x0);
     }
     
@@ -462,19 +485,14 @@ void
 IoFreeWorkItem_k8 (
     PIO_WORKITEM IoWorkItem )
 {
-    ULONG               i;
+    ULONG               CLEANUP_Index, CLEANUP_RevIndex;
     KLOCK_QUEUE_HANDLE  LockHandle;
 
     KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
     {
-        for (i = 0; i <= g_LastUsedArray_Entry; i++) {
-            if (WorkerRoutineArray[i].IoWorkItem == IoWorkItem) {
-                    WorkerRoutineArray[i].IoWorkItem = NULL;            // free entry
-                    if (g_LastUsedArray_Entry == i && i > 0)
-                            g_LastUsedArray_Entry--;
-                    break;
-            }
-        }
+     // 1) remove prepared entry from WorkerRoutineArray if IoFreeWorkItem called before IoQueueWorkItemCompatible
+     // 2) shrink WorkerRoutineArray
+     CLEANUP_ENTRY(WorkerRoutineArray, IoWorkItem, IoWorkItem, g_LastUsedWorkerRoutineArray_Entry)
     }
     KeReleaseInStackQueuedSpinLock(&LockHandle);    
 
@@ -495,11 +513,21 @@ IoQueueWorkItemEx_k8 (
 
     KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
     {
+        // check for double
+        for (i = 0; i <= g_LastUsedWorkerRoutineArray_Entry; i++) {
+            if (WorkerRoutineArray[i].IoWorkItem != NULL &&
+                WorkerRoutineArray[i].Context == Context) { // double => bugcheck
+                    KeReleaseInStackQueuedSpinLock(&LockHandle);
+                    DbgPrint("ntoskrn8: WorkerRoutineArray double Context");
+                    KeBugCheckEx(0xDEADBEEF, 0x2, (ULONG_PTR)Context, (ULONG_PTR)IoWorkItem, 0x0);
+            }
+        }
+        
         for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
             if (WorkerRoutineArray[i].IoWorkItem == NULL) {
                 foundFreeEntry = TRUE;
-                if (i > g_LastUsedArray_Entry)
-                            g_LastUsedArray_Entry = i;
+                if (i > g_LastUsedWorkerRoutineArray_Entry)
+                            g_LastUsedWorkerRoutineArray_Entry = i;
                 WorkerRoutineArray[i].WorkerRoutineEx = WorkerRoutineEx;
                 WorkerRoutineArray[i].IoWorkItem      = IoWorkItem;
                 WorkerRoutineArray[i].Context         = Context;
@@ -516,7 +544,7 @@ IoQueueWorkItemEx_k8 (
                          Context);
     }
     else {
-        DbgPrint("WorkerRoutineArray overflow");
+        DbgPrint("ntoskrn8: WorkerRoutineArray overflow");
         KeBugCheckEx(0xDEADBEEF, 0x1, (ULONG_PTR)Context, (ULONG_PTR)IoWorkItem, 0x0);
     }
 
@@ -669,7 +697,7 @@ KAFFINITY
 KeSetSystemAffinityThreadEx_k8 (                // RE procgrp.lib
     KAFFINITY Affinity )
 {
-    KeSetSystemAffinityThread(Affinity);
+    KeSetSystemAffinityThread_k8(Affinity);
     return (KAFFINITY)0;
 }
 
@@ -1099,181 +1127,6 @@ KeQueryLogicalProcessorRelationship_k8 (
 ////////////////////////////////////////////
 
 
-/*
-///////////////////////////////////////////
-//  debug KeQueryLogicalProcessorRelationship
-
-#define TEMP_BUFFER_SIZE        128
-#define TRACE_LEVEL_CRITICAL    DPFLTR_ERROR_LEVEL        
-#define TRACE_LEVEL_FATAL       DPFLTR_ERROR_LEVEL        
-#define TRACE_LEVEL_ERROR       DPFLTR_ERROR_LEVEL       
-#define TRACE_LEVEL_WARNING     DPFLTR_WARNING_LEVEL      
-#define TRACE_LEVEL_INFORMATION DPFLTR_TRACE_LEVEL   
-#define TRACE_LEVEL_VERBOSE     DPFLTR_INFO_LEVEL   
-
-#include <ntstrsafe.h>
-
-void
-TraceGUMessage(
-    IN PCCHAR  func,
-    IN PCCHAR  file,
-    IN ULONG   line,
-    IN ULONG   level,
-    IN PCCHAR  format,
-    ...
-    )
-
- {
-    va_list    list;
-    NTSTATUS   status;
-    char psPrefix [TEMP_BUFFER_SIZE];
-    PCCHAR  fileName;
-
-    va_start(list, format);
-
-    fileName = strrchr(file, '\\');
-
-    if (fileName != NULL)
-    {
-        fileName++;
-    }
-    
-    
-    if(level == TRACE_LEVEL_ERROR) 
-    {
-        status = RtlStringCchPrintfA(psPrefix, TEMP_BUFFER_SIZE, "%s", " ");
-    }
-    else
-    {
-        status = RtlStringCchPrintfA(psPrefix, TEMP_BUFFER_SIZE, "%s", " ");
-        level = TRACE_LEVEL_ERROR;
-    }
-    
-
-    ASSERT(NT_SUCCESS(status));
-    vDbgPrintExWithPrefix(psPrefix , DPFLTR_IHVNETWORK_ID, level, format, list);
-
-    va_end(list);
-
-}
-
-
-#define GU_PRINT(_level_,_flag_, _format_, ...)                               \
-        TraceGUMessage(__FUNCTION__, __FILE__, __LINE__, _level_, _format_, __VA_ARGS__);  \
-
-#if (NTDDI_VERSION <= NTDDI_VISTASP4)
-    #define KeQueryLogicalProcessorRelationship     \
-            KeQueryLogicalProcessorRelationship_k8
-#endif
-
-void PrintNumaCpuConfiguration()
-{
-    USHORT NodeNumber;
-    NTSTATUS Status;
-    GROUP_AFFINITY GroupAffinity;
-    USHORT NodeCount, HighestNodeNumber;
-    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX Info = NULL;
-    ULONG BufferSize = 0;
-    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX pCurrInfo;  
-    USHORT i;
-
-    //
-    // Get required buffer size.
-    //
-    PROCESSOR_NUMBER Filter;
-
-    Filter.Group    = 0;
-    Filter.Number   = 3;
-    Filter.Reserved = 0;
-
-    Status = KeQueryLogicalProcessorRelationship(NULL, RelationAll, NULL, &BufferSize);
-
-    ASSERT(Status == STATUS_INFO_LENGTH_MISMATCH && BufferSize > 0);
-
-    //
-    // Allocate buffer (assume IRQL <= APC_LEVEL).
-    //
-    Info = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) ExAllocatePoolWithTag(PagedPool, BufferSize, ' gaT');
-    if (Info == NULL)
-    {
-        return;
-    }
-
-    //
-    // Get processor relationship information.
-    //
-    Status = KeQueryLogicalProcessorRelationship(NULL, RelationAll, Info, &BufferSize);
-
-    if(Status != STATUS_SUCCESS)
-    {
-        return;
-    }
-
-    GU_PRINT(TRACE_LEVEL_ERROR, GU, "\n\nSystem processor information:\n");
-
-
-    for(pCurrInfo = Info;
-        (char *) pCurrInfo < (char *) Info + BufferSize;
-        pCurrInfo = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) ((char *) pCurrInfo + pCurrInfo->Size))
-    {
-        switch(pCurrInfo->Relationship)
-        {
-        case RelationProcessorCore:
-            GU_PRINT(TRACE_LEVEL_ERROR, GU, "--Processor core-- Group=%d Mask=0x%p\n", 
-                pCurrInfo->Processor.GroupMask[0].Group, 
-                (void *) pCurrInfo->Processor.GroupMask[0].Mask );
-            break;
-
-        case RelationProcessorPackage:
-            GU_PRINT(TRACE_LEVEL_ERROR, GU, "--Processor package-- Group count %d\n", pCurrInfo->Processor.GroupCount);
-            for(i = 0; i < pCurrInfo->Processor.GroupCount; i++)
-            {
-                GU_PRINT(TRACE_LEVEL_ERROR, GU, "Group #%d: Group=%d Mask=0x%p\n", i, 
-                    pCurrInfo->Processor.GroupMask[i].Group,
-                    (void *) pCurrInfo->Processor.GroupMask[i].Mask);
-            }
-            break;
-
-        case RelationNumaNode:
-            GU_PRINT(TRACE_LEVEL_ERROR, GU, "--Numa node-- Node #%d ProcessorGroup=%d ProcessorMask=0x%p\n", 
-                pCurrInfo->NumaNode.NodeNumber, pCurrInfo->NumaNode.GroupMask.Group, (void *) pCurrInfo->NumaNode.GroupMask.Mask);
-            break;
-
-        case RelationGroup:
-            GU_PRINT(TRACE_LEVEL_ERROR, GU, "--Groups info-- MaxGroupCount=%d ActiveGroupCount=%d\n", 
-                pCurrInfo->Group.MaximumGroupCount, pCurrInfo->Group.ActiveGroupCount);
-            for(i = 0; i < pCurrInfo->Group.ActiveGroupCount; i++)
-            {
-                GU_PRINT(TRACE_LEVEL_ERROR, GU, "Group #%d: MaxProcCount=%d ActiveProcCount=%d ActiveProcMask=0x%p\n", i, 
-                    pCurrInfo->Group.GroupInfo[i].MaximumProcessorCount,
-                    pCurrInfo->Group.GroupInfo[i].ActiveProcessorCount,
-                    (void *) pCurrInfo->Group.GroupInfo[i].ActiveProcessorMask);
-            }
-            break;
-
-        case RelationCache:
-            GU_PRINT(TRACE_LEVEL_ERROR, GU, "--Cache info-- Level=L%d, Associativity=%d, LineSize=%d bytes, \
-                CacheSize=%d bytes, Type=%d, ProcGroup=%d, ProcMask=0x%p\n", 
-                pCurrInfo->Cache.Level, 
-                pCurrInfo->Cache.Associativity,
-                pCurrInfo->Cache.LineSize,
-                pCurrInfo->Cache.CacheSize,
-                pCurrInfo->Cache.Type,
-                pCurrInfo->Cache.GroupMask.Group,
-                (void *) pCurrInfo->Cache.GroupMask.Mask);
-            break;
-
-        default:
-            ASSERT(FALSE);
-            break;
-        }
-    }
-
-}
-
-//  debug
-/////////////////////////////////
-*/
 
 NTSTATUS
 IoConnectInterruptEx_k8 (                       // RE iointex.lib
@@ -1844,16 +1697,17 @@ PsSetCreateProcessNotifyRoutineEx_k8 (
     PCREATE_PROCESS_NOTIFY_ROUTINE_EX NotifyRoutine,
     BOOLEAN Remove )
 {
-    ULONG               i;
-    BOOLEAN             foundFreeEntry = FALSE;
+    ULONG               i, CLEANUP_Index, CLEANUP_RevIndex;
     KLOCK_QUEUE_HANDLE  LockHandle;
     NTSTATUS            status = STATUS_SUCCESS;
 
-    if (Remove ==  FALSE) { // Add new callback
-        KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
-        {
+    KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
+    {
+     if (Remove ==  FALSE) { // Add new callback
+     
+            // check for double
             for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
-                if (CreateProcessNotifyExArray[i].Routine == NotifyRoutine) { // double record
+                if (CreateProcessNotifyExArray[i].Routine == NotifyRoutine) { // double
                     status = STATUS_INVALID_PARAMETER;
                     break;
                 }
@@ -1862,39 +1716,19 @@ PsSetCreateProcessNotifyRoutineEx_k8 (
             if (status != STATUS_INVALID_PARAMETER) {
                 for (i = 0; i < MAX_CreateProcessNotifyEx; i++) {
                     if (CreateProcessNotifyExArray[i].Routine == NULL) {
-                        foundFreeEntry = TRUE;
-
                         if (i > g_LastUsedCreateProcessNotifyExArray_Entry)
                                     g_LastUsedCreateProcessNotifyExArray_Entry = i;
 
                         CreateProcessNotifyExArray[i].Routine = NotifyRoutine;
-                        //g_CreateProcessNotifyRoutineExCount++;
                         break;
                     }
                 }
             }
-
-        }
-        KeReleaseInStackQueuedSpinLock(&LockHandle);
-
+     }
+     else                   // remove callback & shrink CreateProcessNotifyExArray
+         CLEANUP_ENTRY(CreateProcessNotifyExArray, Routine, NotifyRoutine, g_LastUsedCreateProcessNotifyExArray_Entry)
     }
-    else {                  // remove callback
-        KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
-        {
-            for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
-                if (CreateProcessNotifyExArray[i].Routine == NotifyRoutine) {
-                        CreateProcessNotifyExArray[i].Routine = NULL;      // free entry
-
-                        if (g_LastUsedCreateProcessNotifyExArray_Entry == i && i > 0)
-                                g_LastUsedCreateProcessNotifyExArray_Entry--;
-
-                        //g_CreateProcessNotifyRoutineExCount--;                                
-                        break;
-                }
-            }
-        }
-        KeReleaseInStackQueuedSpinLock(&LockHandle);  
-    }
+    KeReleaseInStackQueuedSpinLock(&LockHandle);
     
     return status; 
 }

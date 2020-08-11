@@ -139,6 +139,12 @@ GetModuleBaseAddress (
 
 extern PVOID CREATE_PROCESS_NOTIFY_ROUTINE_asm; // ntoskrn8_helpers.asm
 
+
+void
+KeSetSystemAffinityThread_k8 (
+    KAFFINITY Affinity );
+
+
 // early + external definition
 /////////////////////////////////////////////////////////
 
