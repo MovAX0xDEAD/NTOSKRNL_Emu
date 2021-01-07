@@ -6,53 +6,13 @@
 #include "common.h"
 #include "wrk2003.h"
 
-#define NtQuery_BUFFERSIZE (100 * 1024) // 100KB/sizeof(RTL_PROCESS_MODULE_INFORMATION) 100*1024/284 = 360 max records
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 uintptr_t __security_cookie = 0xDEADBEEF;
 
-const LARGE_INTEGER MmShortTime = {(ULONG)(-10 * 1000 * 10), -1}; // 10 milliseconds
 
-typedef struct _RTL_PROCESS_MODULE_INFORMATION {
-    HANDLE Section;                 // Not filled in
-    PVOID MappedBase;
-    PVOID ImageBase;
-    ULONG ImageSize;
-    ULONG Flags;
-    USHORT LoadOrderIndex;
-    USHORT InitOrderIndex;
-    USHORT LoadCount;
-    USHORT OffsetToFileName;
-    UCHAR  FullPathName[ 256 ];
-} RTL_PROCESS_MODULE_INFORMATION, *PRTL_PROCESS_MODULE_INFORMATION;
-
-
-typedef struct _RTL_PROCESS_MODULES {
-    ULONG NumberOfModules;
-    RTL_PROCESS_MODULE_INFORMATION Modules[ 1 ];
-} RTL_PROCESS_MODULES, *PRTL_PROCESS_MODULES;
-
-
-typedef struct _KLDR_DATA_TABLE_ENTRY {
-    LIST_ENTRY InLoadOrderLinks;
-    PVOID ExceptionTable;
-    ULONG ExceptionTableSize;
-    // ULONG padding on IA64
-    PVOID GpValue;
-    PNON_PAGED_DEBUG_INFO NonPagedDebugInfo;
-    PVOID DllBase;
-    PVOID EntryPoint;
-    ULONG SizeOfImage;
-    UNICODE_STRING FullDllName;
-    UNICODE_STRING BaseDllName;
-    ULONG Flags;
-    USHORT LoadCount;
-    USHORT __Unused5;
-    PVOID SectionPointer;
-    ULONG CheckSum;
-    // ULONG padding on IA64
-    PVOID LoadedImports;
-    PVOID PatchInformation;
-} KLDR_DATA_TABLE_ENTRY, *PKLDR_DATA_TABLE_ENTRY;
 
 
 #if defined(_X86_)
@@ -82,139 +42,100 @@ KeSetCoalescableTimer_k8 (
 }
 
 
-PVOID
-GetRoutineAddress (
-    PUNICODE_STRING SystemRoutineName,
-    const PCHAR Modulename)
-{
-    NTSTATUS                Status;
-    ANSI_STRING             AnsiString;
-    PVOID                   FunctionAddress;
-    LOGICAL                 Found;
-    ULONG                   ReturnLength;
-    PRTL_PROCESS_MODULES    ModuleInformation;
-    PRTL_PROCESS_MODULE_INFORMATION ModuleInfo;
-    ULONG                   Index;
-    CHAR                   *FileName;
-    ULONG_PTR               OldUserProbeAddress;
-    ULONG_PTR              *pUserProbeAddress;
 
-    do {
-        Status = RtlUnicodeStringToAnsiString(&AnsiString,
-                                              SystemRoutineName,
-                                              TRUE);
-        if (NT_SUCCESS(Status))
-        {
-            break;
+/*
+int __cdecl
+stricmp_k8 (const char *s1, const char *s2)
+{
+  while (toupper(*s1) == toupper(*s2))
+  {
+    if (*s1 == 0)
+      return 0;
+    s1++;
+    s2++;
+  }
+  return toupper(*(unsigned const char *)s1) - toupper(*(unsigned const char *)(s2));
+}
+*/
+
+BOOLEAN
+RtlGetIntegerAtom_k8 (
+    PWSTR Name,
+    PRTL_ATOM Atom )
+{
+    NTSTATUS Status;
+    UNICODE_STRING UnicodeString;
+    PWSTR s;
+    ULONG n;
+    RTL_ATOM Temp;
+
+    if (((ULONG_PTR)Name & -0x10000) == 0) {
+        Temp = (RTL_ATOM)(USHORT)PtrToUlong(Name);
+        if (Temp >= RTL_ATOM_MAXIMUM_INTEGER_ATOM) {
+            return FALSE;
+            }
+        else {
+            if (Temp == RTL_ATOM_INVALID_ATOM) {
+                Temp = RTL_ATOM_MAXIMUM_INTEGER_ATOM;
+                }
+
+            if (ARGUMENT_PRESENT( Atom )) {
+                *Atom = Temp;
+                }
+
+            return TRUE;
+            }
+        }
+    else
+    if (*Name != L'#') {
+        return FALSE;
         }
 
-        KeDelayExecutionThread(KernelMode, FALSE, (PLARGE_INTEGER)&MmShortTime);
-
-    } while (TRUE);
-
-    if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
-        ModuleInformation = ExAllocatePoolWithTag(NonPagedPool, NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
-    else    
-        ModuleInformation = ExAllocatePoolWithTag(PagedPool,    NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
-
-    RtlZeroMemory(ModuleInformation, NtQuery_BUFFERSIZE * sizeof(UCHAR));
-
-    pUserProbeAddress = &MmUserProbeAddress;
-    OldUserProbeAddress = *pUserProbeAddress;
-    *pUserProbeAddress  = (ULONG_PTR)-1; // hack to allow NtQuerySystemInformation write
-                                         // to Buffer allocated in kernel space > 0x7FFF0000
-    Status = NtQuerySystemInformation(  SystemModuleInformation,
-                                        ModuleInformation,
-                                        NtQuery_BUFFERSIZE * sizeof(UCHAR),
-                                        &ReturnLength );
-    *pUserProbeAddress  = OldUserProbeAddress;
-
-    if (Status != STATUS_SUCCESS) {
-        RtlFreeAnsiString (&AnsiString);
-        ExFreePoolWithTag(ModuleInformation, 'pmuD');
-        return NULL;
-    }
-
-    Found = FALSE;
-    for (Index = 0; Index < ModuleInformation->NumberOfModules; Index++)
-    {
-        ModuleInfo = &ModuleInformation->Modules[Index];
-        FileName = ModuleInfo->FullPathName + ModuleInfo->OffsetToFileName;
-
-            if (strcmp(FileName, Modulename) == 0)
-            {
-                Found = TRUE;
-                break;
+    s = ++Name;
+    while (*s != UNICODE_NULL) {
+        if (*s < L'0' || *s > L'9') {
+            return FALSE;
             }
-    }
-    
-    if (Found == TRUE)
-        FunctionAddress = MiFindExportedRoutineByName( ModuleInfo->ImageBase,
-                                                       &AnsiString );
-    else
-        FunctionAddress = NULL;
+        else {
+            s++;
+            }
+        }
 
-    RtlFreeAnsiString (&AnsiString);
-    ExFreePoolWithTag(ModuleInformation, 'pmuD');
-    return FunctionAddress;
+    n = 0;
+    UnicodeString.Buffer = Name;
+    UnicodeString.Length = (USHORT)((PCHAR)s - (PCHAR)Name);
+    UnicodeString.MaximumLength = UnicodeString.Length;
+    Status = RtlUnicodeStringToInteger( &UnicodeString, 10, &n );
+    if (NT_SUCCESS( Status )) {
+        if (ARGUMENT_PRESENT( Atom )) {
+            if (n == 0 || n > RTL_ATOM_MAXIMUM_INTEGER_ATOM) {
+                *Atom = RTL_ATOM_MAXIMUM_INTEGER_ATOM;
+                }
+            else {
+                *Atom = (RTL_ATOM)n;
+                }
+            }
+
+        return TRUE;
+        }
+    else {
+        return FALSE;
+        }
 }
 
 
-PVOID
-GetModuleBaseAddress (
-    const PCHAR Modulename)
+NTSTATUS
+RtlGetThreadLangIdByIndex_k8 (
+    ULONG a1,
+    ULONG a2,
+    ULONG *PreferredLanguages,
+    ULONG *Result2)
 {
-    NTSTATUS                Status;
-    PVOID                   FunctionAddress;
-    LOGICAL                 Found;
-    ULONG                   ReturnLength;
-    PRTL_PROCESS_MODULES    ModuleInformation;
-    PRTL_PROCESS_MODULE_INFORMATION ModuleInfo;
-    ULONG                   Index;
-    CHAR                   *FileName;
-    ULONG_PTR               OldUserProbeAddress;
-    ULONG_PTR              *pUserProbeAddress;
-
-    if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
-        ModuleInformation = ExAllocatePoolWithTag(NonPagedPool, NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
-    else    
-        ModuleInformation = ExAllocatePoolWithTag(PagedPool,    NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
-
-    RtlZeroMemory(ModuleInformation, NtQuery_BUFFERSIZE * sizeof(UCHAR));
-
-    pUserProbeAddress = &MmUserProbeAddress;
-    OldUserProbeAddress = *pUserProbeAddress;
-    *pUserProbeAddress  = (ULONG_PTR)-1; // hack to allow NtQuerySystemInformation write
-                                         // to Buffer allocated in kernel space > 0x7FFF0000
-    Status = NtQuerySystemInformation(  SystemModuleInformation,
-                                        ModuleInformation,
-                                        NtQuery_BUFFERSIZE * sizeof(UCHAR),
-                                        &ReturnLength );
-    *pUserProbeAddress  = OldUserProbeAddress;
-
-    if (Status != STATUS_SUCCESS) {
-        ExFreePoolWithTag(ModuleInformation, 'pmuD');
-        return NULL;
-    }
-
-    Found = FALSE;
-    for (Index = 0; Index < ModuleInformation->NumberOfModules; Index++)
-    {
-        ModuleInfo = &ModuleInformation->Modules[Index];
-        FileName = ModuleInfo->FullPathName + ModuleInfo->OffsetToFileName;
-
-            if (strcmp(FileName, Modulename) == 0)
-            {
-                Found = TRUE;
-                break;
-            }
-    }
-    
-    if (Found == TRUE)
-        FunctionAddress = ModuleInfo->ImageBase;
-    else
-        FunctionAddress = NULL;
-
-    ExFreePoolWithTag(ModuleInformation, 'pmuD');
-    return FunctionAddress;
+    *PreferredLanguages= 1033; // english
+  
+    return STATUS_SUCCESS;
 }
+
+#ifdef __cplusplus
+}
+#endif

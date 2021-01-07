@@ -8,6 +8,10 @@
 #include "common.h"
 #include "wrk2003.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum _STORPORT_FUNCTION_CODE_W10 {
     ///////////////////////////////////////////
     //      Windows 2003
@@ -164,36 +168,36 @@ StorPortExtendedFunction (
 
 enum _STOR_SYNCHRONIZATION_MODEL
 {
-    StorSynchronizeHalfDuplex=0,
-    StorSynchronizeFullDuplex=1
+    StorSynchronizeHalfDuplex = 0,
+    StorSynchronizeFullDuplex = 1
 };
 
 enum _INTERRUPT_SYNCHRONIZATION_MODE
 {
-    InterruptSupportNone=0,
-    InterruptSynchronizeAll=1,
-    InterruptSynchronizePerMessage=2
+    InterruptSupportNone = 0,
+    InterruptSynchronizeAll = 1,
+    InterruptSynchronizePerMessage = 2
 };
 
 enum _RAID_OBJECT_TYPE
 {
-    RaidUnknownObject=-1,
-    RaidAdapterObject=0,
-    RaidUnitObject=1,
-    RaidDriverObject=2
+    RaidUnknownObject = -1,
+    RaidAdapterObject = 0,
+    RaidUnitObject = 1,
+    RaidDriverObject =  2
 };
 
 enum _DEVICE_STATE
 {
-    DeviceStateNotPresent=0,
-    DeviceStateWorking=1,
-    DeviceStateStopped=2,
-    DeviceStatePendingStop=3,
-    DeviceStatePendingRemove=4,
-    DeviceStateSurpriseRemoval=5,
-    DeviceStateDeleted=6,
-    DeviceStateDisabled=7,
-    DeviceStateNoResource=8
+    DeviceStateNotPresent = 0,
+    DeviceStateWorking = 1,
+    DeviceStateStopped = 2,
+    DeviceStatePendingStop = 3,
+    DeviceStatePendingRemove = 4,
+    DeviceStateSurpriseRemoval = 5,
+    DeviceStateDeleted = 6,
+    DeviceStateDisabled = 7,
+    DeviceStateNoResource = 8
 };
 
 
@@ -211,9 +215,9 @@ typedef struct _STOR_DICTIONARY             // Size=0x1c
     unsigned long        MaxEntryCount;                         // Offset=0x4 Size=0x4
     enum _POOL_TYPE      PoolType;                              // Offset=0x8 Size=0x4
     struct _LIST_ENTRY  *Entries;                               // Offset=0xc Size=0x4
-    void              *(*GetKeyRoutine)(struct _LIST_ENTRY *);  // Offset=0x10 Size=0x4
-    long               (*CompareKeyRoutine)(void *, void *);    // Offset=0x14 Size=0x4
-    unsigned long      (*HashKeyRoutine)(void *);               // Offset=0x18 Size=0x4
+    void                *(*GetKeyRoutine)(struct _LIST_ENTRY *);// Offset=0x10 Size=0x4
+    long                (*CompareKeyRoutine)(void *, void *);   // Offset=0x14 Size=0x4
+    unsigned long       (*HashKeyRoutine)(void *);              // Offset=0x18 Size=0x4
 } STOR_DICTIONARY;
 
 
@@ -399,11 +403,14 @@ typedef struct _RAID_ADAPTER_EXTENSION  // Size=0x5e0
 } RAID_ADAPTER_EXTENSION, *PRAID_ADAPTER_EXTENSION;
 
 
+#pragma warning(push)
+#pragma warning(disable:4200)               // HwDeviceExtension[] warning
 typedef struct _RAID_HW_DEVICE_EXT          // Size=0x4
 {
     struct _RAID_MINIPORT *Miniport;        // Offset=0x0 Size=0x4
-    unsigned char HwDeviceExtension[0];     // Offset=0x4
+    unsigned char HwDeviceExtension[];      // Offset=0x4
 } RAID_HW_DEVICE_EXT;
+#pragma warning(pop)
 
 
 typedef struct _RAID_UNIT_EXTENSION             // Size=0x2a0
@@ -571,7 +578,7 @@ typedef struct _RAID_HW_DEVICE_EXT          // Size=0x8
 {
     struct _RAID_MINIPORT *Miniport;        // Offset=0x0 Size=0x4
     void *Reserved;                         // Offset=0x4 Size=0x4
-    unsigned char HwDeviceExtension[0];     // Offset=0x8
+    unsigned char HwDeviceExtension[];      // Offset=0x8
 } RAID_HW_DEVICE_EXT;
 
 
@@ -626,13 +633,11 @@ typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
 //UNICODE_STRING StorPortExtendedFunctionName = RTL_CONSTANT_STRING(L"StorPortExtendedFunction");
 // LIST_ENTRY *gPsLoadedModuleList;
 
-const char* DUMPPREFIX = "dump";
+static const char* DUMPPREFIX = "dump";
 
-extern const
-LARGE_INTEGER   MmShortTime;
 
-BOOLEAN         gIsWeInitialized = FALSE;
-BOOLEAN         gDumpMode;
+static BOOLEAN  gIsWeInitialized = FALSE;
+       BOOLEAN  gDumpMode;
 
 PVOID    gScsiPortMoveMemory;
 PVOID    gScsiPortNotification;
@@ -766,8 +771,14 @@ isDumpMode(PUNICODE_STRING RegistryPath)
 
 
 #define GETROUTINE(x)                                                   \
-           RtlInitAnsiString(&AnsiString, #x);                          \
-           g##x = MiFindExportedRoutineByName(BaseAdress, &AnsiString);           
+           RtlInitAnsiString(&AnsiString, #x);                        \
+           g##x = MiFindExportedRoutineByName_k8(BaseAdress, &AnsiString);
+
+
+#define GETROUTINETYPE(x, y)                                                   \
+           RtlInitAnsiString(&AnsiString, #x);                        \
+           g##x = (y) MiFindExportedRoutineByName_k8(BaseAdress, &AnsiString);
+
 
 void
 StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath) 
@@ -776,10 +787,10 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
     PVOID           BaseAdress;
 
     gIsWeInitialized = TRUE;
-    gDumpMode=isDumpMode(RegistryPath);
+    gDumpMode = isDumpMode(RegistryPath);
 
     if (gDumpMode) {
-        BaseAdress = GetModuleBaseAddress("dump_diskdump.sys");
+        BaseAdress = GetModuleBaseAddress_k8("dump_diskdump.sys");
         if (BaseAdress == NULL) {
             gDumpMode = FALSE;      // error,  dump_diskdump.sys not found
             return;
@@ -794,7 +805,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
         GETROUTINE(StorPortDebugPrint)
         GETROUTINE(StorPortDeviceBusy)
         GETROUTINE(StorPortDeviceReady)
-        GETROUTINE(StorPortExtendedFunction)
+        GETROUTINETYPE(StorPortExtendedFunction, ULONG (__stdcall *)(STORPORT_FUNCTION_CODE,PVOID,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR))
         GETROUTINE(StorPortFreeDeviceBase)
         GETROUTINE(StorPortFreeRegistryBuffer)
         GETROUTINE(StorPortGetBusData)
@@ -806,7 +817,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
         GETROUTINE(StorPortGetUncachedExtension)
         GETROUTINE(StorPortGetVirtualAddress)
         GETROUTINE(StorPortLogError)
-        GETROUTINE(StorPortInitialize)
+        GETROUTINETYPE(StorPortInitialize, ULONG (__stdcall *)(PVOID,PVOID,_HW_INITIALIZATION_DATA *,PVOID))
         GETROUTINE(StorPortMoveMemory)
         GETROUTINE(StorPortNotification)
         GETROUTINE(StorPortPause)
@@ -825,7 +836,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
         GETROUTINE(StorPortReadRegisterUlong)
         GETROUTINE(StorPortReadRegisterUshort)
         GETROUTINE(StorPortReady)
-        GETROUTINE(StorPortRegistryRead)
+        GETROUTINETYPE(StorPortRegistryRead, BOOLEAN (__stdcall *)(PVOID,PUCHAR,ULONG,ULONG,PUCHAR,PULONG))
         GETROUTINE(StorPortRegistryWrite)
         GETROUTINE(StorPortResume)
         GETROUTINE(StorPortResumeDevice)
@@ -928,7 +939,7 @@ RaidSyncAcpiEvalMethod (
             status = IoStatusBlock.Status;
         }
         
-        if ( status >= 0 && IoStatusBlock.Information==0 && OutputBufferLength > 0 )
+        if ( status >= 0 && IoStatusBlock.Information == 0 && OutputBufferLength > 0 )
             status = STATUS_UNSUCCESSFUL;
 
         if (BytesReturned != NULL) {
@@ -1007,20 +1018,19 @@ StorFindDictionary (
     ULONG  ( *HashKeyRoutine)    (void *);
 
     LIST_ENTRY  *Entries;
-    LIST_ENTRY  *List, *ListHead;
+    LIST_ENTRY  *ListHead;
     NTSTATUS     status;
 
     Entries             = UnitDictionary->Entries;
-    GetKeyRoutine       = (PVOID) UnitDictionary->GetKeyRoutine;
-    CompareKeyRoutine   = (PVOID) UnitDictionary->CompareKeyRoutine;
-    HashKeyRoutine      = (PVOID) UnitDictionary->HashKeyRoutine;
+    GetKeyRoutine       = UnitDictionary->GetKeyRoutine;
+    CompareKeyRoutine   = UnitDictionary->CompareKeyRoutine;
+    HashKeyRoutine      = UnitDictionary->HashKeyRoutine;
     
     ListHead = (LIST_ENTRY  *) ((UCHAR *)Entries +
                  sizeof(LIST_ENTRY) *
                  (HashKeyRoutine((void *)AddressToLong) % UnitDictionary->MaxEntryCount));
-    List = ListHead->Flink;
 
-    for (List = ListHead->Flink; List != ListHead; List = List->Flink)
+    for (LIST_ENTRY* List = ListHead->Flink; List != ListHead; List = List->Flink)
     {
         
         status = CompareKeyRoutine(GetKeyRoutine(List), (void *)AddressToLong);
@@ -1125,7 +1135,7 @@ StorportTimerDpc (
     TimerCallback       Callback;
     KLOCK_QUEUE_HANDLE  Lock;
 
-    Callback = InterlockedExchangePointer((PVOID *)&TIMER_CONTEXT->Callback, NULL);
+    Callback = (TimerCallback) InterlockedExchangePointer((PVOID *)&TIMER_CONTEXT->Callback, NULL);
     if (Callback) {
         RaidAdapterAcquireStartIoLock(TIMER_CONTEXT->Adapter, &Lock);
         Callback(TIMER_CONTEXT->Adapter->Miniport.PrivateDeviceExt->HwDeviceExtension, TIMER_CONTEXT->CallbackContext);
@@ -1157,16 +1167,15 @@ typedef HW_TIMER_EX *PHW_TIMER_EX;
 // pattern generator.
 #define PATTERN "InTheHeatOfTheNightILooseControl" // (c) Sandra
 #define PATTERN_SIZE (sizeof(PATTERN) - 1)
-UCHAR const gPattern[] = PATTERN;
+static const UCHAR gPattern[] = PATTERN;
 
 
 VOID
 FillBufferWithPattern (UCHAR *Buffer, ULONG BufferLength )
 {
-    ULONG Index;
     ULONG Rotor = 0;
 
-    for (Index = 0; Index < BufferLength; Index ++) {
+    for (ULONG Index = 0; Index < BufferLength; Index ++) {
         Buffer[Index] = gPattern[Rotor] XOR (UCHAR)(0xA1 - Index);
         Rotor ++;
         if (Rotor == PATTERN_SIZE) {
@@ -1179,10 +1188,9 @@ FillBufferWithPattern (UCHAR *Buffer, ULONG BufferLength )
 BOOLEAN
 isPatternMatch (UCHAR *Buffer, ULONG BufferLength )
 {
-    ULONG Index;
     ULONG Rotor = 0;
 
-    for (Index = 0; Index < BufferLength; Index ++) {
+    for (ULONG Index = 0; Index < BufferLength; Index ++) {
         if (Buffer[Index] != (gPattern[Rotor] XOR (UCHAR)(0xA1 - Index)))
             return FALSE;
 
@@ -1214,7 +1222,7 @@ StorPortInitialize_k8 (
     PVOID HwContext )
 {
     if (!gIsWeInitialized)                  // dump mode, called from miniport
-        StorportInit(Argument1, Argument2); // both args are null
+        StorportInit((PDEVICE_OBJECT) Argument1, (PUNICODE_STRING) Argument2); // both args are null
 
     if (gDumpMode)          // passthrough
         return gStorPortInitialize(
@@ -1502,7 +1510,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
             return STOR_STATUS_INVALID_IRQL;
 
         Adapter = GetAdapter(HwDeviceExtension);    
-        Timer   = ExAllocatePoolWithTag(NonPagedPool, sizeof(STOR_TIMER_CONTEXT), 'TAaR');
+        Timer   = (STOR_TIMER_CONTEXT *) ExAllocatePoolWithTag(NonPagedPool, sizeof(STOR_TIMER_CONTEXT), 'TAaR');
         if (Timer == NULL)
             return STOR_STATUS_INSUFFICIENT_RESOURCES;
 
@@ -1615,7 +1623,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
             PackedAddress.PathId   = Address->AddressData[0];
             PackedAddress.TargetId = Address->AddressData[1];
             PackedAddress.Lun      = Address->AddressData[2];
-            if (RaidAdapterFindUnit(HwDeviceExtension, PackedAddress ) == NULL)
+            if (RaidAdapterFindUnit((RAID_ADAPTER_EXTENSION *) HwDeviceExtension, PackedAddress ) == NULL)
                 return STOR_STATUS_INVALID_PARAMETER;
             }
 
@@ -1760,7 +1768,7 @@ DllInitialize (                // Main entry
     }
      */
     
-    StorportInit((PVOID)-1, RegistryPath);
+    StorportInit((PDEVICE_OBJECT) -1, RegistryPath);
 
     return STATUS_SUCCESS;
 }
@@ -1772,4 +1780,7 @@ DllUnload (void)
     return STATUS_SUCCESS;
 }
 
-//#include "storport_redirects.h"
+
+#ifdef __cplusplus
+}
+#endif

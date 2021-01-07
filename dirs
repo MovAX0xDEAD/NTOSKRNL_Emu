@@ -1,3 +1,3 @@
 DIRS= \
-     ntoskrn8 \
-     storpor8
+     ntoskrn8      \
+     storpor8      \

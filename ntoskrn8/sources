@@ -1,6 +1,12 @@
 #########################################################################
+
 USE_NOLIBS=1
 BUFFER_OVERFLOW_CHECKS=0
+NT_UP=0
+USECXX_FLAG=1
+#_X86PAE_
+#NTDDI_VERSION=0x06000200
+
 
 USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
 # /P /Fiheaders/
@@ -9,6 +15,7 @@ USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
 #!if $(386)
 #MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /arch:IA32 #disable sse
 #!endif
+
 #########################################################################
 
 
@@ -16,14 +23,64 @@ TARGETNAME=ntoskrn8
 TARGETTYPE=EXPORT_DRIVER
 TARGETPATH=obj$(BUILD_ALT_DIR)
 
-TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
-		$(DDK_LIB_PATH)\ntstrsafe.lib 
+
+TARGETLIBS=$(TARGETLIBS) $(DDK_LIB_PATH)\ntstrsafe.lib \
+
                 
 !if $(386)
-TARGETLIBS=$(TARGETLIBS) ..\i386\safecrtnt.lib
+SAFECRTPATH=..\i386\safecrtnt
 !elseif $(AMD64)
-TARGETLIBS=$(TARGETLIBS) ..\amd64\safecrtnt.lib
+SAFECRTPATH=..\amd64\safecrtnt
 !endif
+
+TARGETLIBS=$(TARGETLIBS) $(SAFECRTPATH)\_wcscat_s.obj \
+                         $(SAFECRTPATH)\wcstok_s.obj \
+                         $(SAFECRTPATH)\wcsset_s.obj \
+                         $(SAFECRTPATH)\wcsnset_s.obj \
+                         $(SAFECRTPATH)\wcslen_s.obj \
+                         $(SAFECRTPATH)\wcsncpy_s.obj \
+                         $(SAFECRTPATH)\wcsncat_s.obj \
+                         $(SAFECRTPATH)\wcscpy_s.obj \
+                         $(SAFECRTPATH)\strtok_s.obj \
+                         $(SAFECRTPATH)\strset_s.obj \
+                         $(SAFECRTPATH)\strnset_s.obj \
+                         $(SAFECRTPATH)\strlen_s.obj \
+                         $(SAFECRTPATH)\strncpy_s.obj \
+                         $(SAFECRTPATH)\strncat_s.obj \
+                         $(SAFECRTPATH)\strcpy_s.obj \
+                         $(SAFECRTPATH)\strcat_s.obj \
+                         $(SAFECRTPATH)\memmove_s.obj \
+                         $(SAFECRTPATH)\memcpy_s.obj \
+                         $(SAFECRTPATH)\safecrt_ungetwc.obj \
+                         $(SAFECRTPATH)\safecrt_ungetc.obj \
+                         $(SAFECRTPATH)\safecrt_fgetwc.obj \
+                         $(SAFECRTPATH)\safecrt_wscanf_s.obj \
+                         $(SAFECRTPATH)\safecrt_woutput_s.obj \
+                         $(SAFECRTPATH)\safecrt_winput_s.obj \
+                         $(SAFECRTPATH)\safecrt_swscanf_s.obj \
+                         $(SAFECRTPATH)\safecrt_swprintf_s.obj \
+                         $(SAFECRTPATH)\safecrt_sscanf_s.obj \
+                         $(SAFECRTPATH)\safecrt_sprintf_s.obj \
+                         $(SAFECRTPATH)\safecrt_snwscanf_s.obj \
+                         $(SAFECRTPATH)\safecrt_snwprintf_s.obj \
+                         $(SAFECRTPATH)\safecrt_snscanf_s.obj \
+                         $(SAFECRTPATH)\safecrt_snprintf_s.obj \
+                         $(SAFECRTPATH)\safecrt_scanf_s.obj \
+                         $(SAFECRTPATH)\safecrt_output_s.obj \
+                         $(SAFECRTPATH)\safecrt_input_s.obj \
+#                         $(SAFECRTPATH)\ctype.obj \             ; ntstrsafe.lib conflict
+#                         $(SAFECRTPATH)\safecrt_fphelpers.obj \ ; external dependies
+                         $(SAFECRTPATH)\safecrt_flsbuf.obj \
+                         $(SAFECRTPATH)\safecrt_filwbuf.obj \
+                         $(SAFECRTPATH)\safecrt_filbuf.obj \
+                         $(SAFECRTPATH)\wsplitpath_s.obj \
+                         $(SAFECRTPATH)\wmakepath_s.obj \
+                         $(SAFECRTPATH)\splitpath_s.obj \
+                         $(SAFECRTPATH)\makepath_s.obj \
+                         $(SAFECRTPATH)\xtoas.obj \
+                         $(SAFECRTPATH)\xtows.obj \
+
+
 
 SOURCES=	..\ntoskrn8.c  \
 		..\ntoskrn8.rc \
@@ -31,8 +88,13 @@ SOURCES=	..\ntoskrn8.c  \
                 ..\common.c    \
                 ..\crt.c
 
-I386_SOURCES=   ..\ntoskrn8_helpers.asm
 
-AMD64_SOURCES=  ..\ntoskrn8_helpers.asm
+I386_SOURCES=   ..\wrk2003_helpers.asm    \
+                ..\ntoskrn8_helpers.asm
+
+
+AMD64_SOURCES=  ..\wrk2003_helpers.asm    \
+                ..\ntoskrn8_helpers.asm
+
 
 DLLDEF=$(OBJ_PATH)\$(O)\ntoskrn8.def

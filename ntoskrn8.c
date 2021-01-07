@@ -1,7 +1,12 @@
 #undef    __STDC_WANT_SECURE_LIB__
 #define   __STDC_WANT_SECURE_LIB__ 0
 
+//#if defined(_M_AMD64)
+//#undef _M_IX86
+//#endif
+
 #include <ntddk.h> 
+#include "ntifs_ddk.h"
 #include <Initguid.h>
 #include <devpkey.h>
 
@@ -9,81 +14,29 @@
 #include "wrk2003.h"
 
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef void                (*pVOID__VOID)            (void);
 typedef void                (*pVOID__ULONG)           (ULONG);
 typedef void                (*pVOID__ULONG_ULONG)     (ULONG,ULONG);
 typedef void    (__stdcall  *pfVOID__ULONG_ULONG)     (ULONG,ULONG);
 typedef BOOLEAN (__stdcall  *pfBOOLEAN__ULONG_ULONG)  (ULONG,ULONG);
 
-typedef struct    _PORT_MESSAGE {
-    union
-    {
-        struct
-        {
-            CSHORT DataLength;
-            CSHORT TotalLength;
-        } s1;
-        ULONG Length;
-    } u1;
-    union
-    {
-        struct
-        {
-            CSHORT Type;
-            CSHORT DataInfoOffset;
-        } s2;
-        ULONG ZeroInit;
-    } u2;
-    union
-    {
-        CLIENT_ID ClientId;
-        double DoNotUseThisField;
-    };
-    ULONG MessageId;
-    union
-    {
-        SIZE_T ClientViewSize;
-        ULONG CallbackId;
-    };
-} PORT_MESSAGE, *PPORT_MESSAGE;
 
-typedef struct _ALPC_MESSAGE_ATTRIBUTES {
-    ULONG AllocatedAttributes;
-    ULONG ValidAttributes;
-} ALPC_MESSAGE_ATTRIBUTES, *PALPC_MESSAGE_ATTRIBUTES;
-
-typedef struct _ALPC_PORT_ATTRIBUTES {
-    ULONG                       Flags;
-    SECURITY_QUALITY_OF_SERVICE SecurityQos;
-    SIZE_T                      MaxMessageLength;
-    SIZE_T                      MemoryBandwidth;
-    SIZE_T                      MaxPoolUsage;
-    SIZE_T                      MaxSectionSize;
-    SIZE_T                      MaxViewSize;
-    SIZE_T                      MaxTotalSectionSize;
-    ULONG                       DupObjectTypes;
-#ifdef _WIN64
-    ULONG Reserved;
-#endif
-} ALPC_PORT_ATTRIBUTES, *PALPC_PORT_ATTRIBUTES; 
-
-typedef void IO_WORKITEM_ROUTINE_EX (
-    PVOID           IoObject,
-    PVOID           Context,
-    PIO_WORKITEM    IoWorkItem
-    );
-typedef IO_WORKITEM_ROUTINE_EX *PIO_WORKITEM_ROUTINE_EX;
-
-typedef struct _WorkerRoutineArray {
-    PIO_WORKITEM_ROUTINE_EX  WorkerRoutineEx;
-    PIO_WORKITEM             IoWorkItem;
-    PVOID                    Context;
-} WorkerRoutineArrayType;
-
-
-typedef struct _CreateProcessNotifyExArray {
+typedef struct _ArrayType_CreateProcessNotifyEx {
     PCREATE_PROCESS_NOTIFY_ROUTINE_EX  Routine;
-} CreateProcessNotifyExArrayType;
+} ArrayType_CreateProcessNotifyEx;
+
+
+typedef struct _ArrayType_LookasideListEx {
+    PALLOCATE_FUNCTION_EX   AllocateEx;
+    PFREE_FUNCTION_EX       FreeEx;
+    PLOOKASIDE_LIST_EX      LookasideEx;
+} ArrayType_LookasideListEx;
+
 
 typedef struct _RoutineAddress {
     UNICODE_STRING  RoutineName;
@@ -91,14 +44,74 @@ typedef struct _RoutineAddress {
 } RoutineAddressType;
 
 
+typedef enum _MEMORY_INFORMATION_CLASS {
+    MemoryBasicInformation,
+    MemoryWorkingSetList,
+    MemorySectionName,
+    MemoryBasicVlmInformation
+} MEMORY_INFORMATION_CLASS; 
+
+typedef int (*PFNRT)();
+
+#define ADDENTRY_FULLPROLOG(Array,Field,g_Spin,MAX,LastUsed_Entry)  \
+for (ULONG iii = 0; iii < MAX; iii++) {                                   \
+    if (Array[iii].Field == NULL) {                                 \
+        if (iii > LastUsed_Entry)                                   \
+            LastUsed_Entry = iii;
+            
+#define ADDENTRY_BEGIN(Name,Field)                                  \
+for (ULONG iii = 0; iii < MAX_##Name; iii++) {                            \
+    if (Array_##Name[iii].Field == NULL) {                          \
+        if (iii > gLastEntry_##Name)                                \
+            gLastEntry_##Name = iii;            
+
+// ADDENTRY BODY ...
+
+#define ADDENTRY_END(Name,BugNum1,BugNum2,BugNum3)  \
+             foundFreeEntry = TRUE;                 \
+             break;                                 \
+            }                                       \
+        }                                           \
+                                                    \
+if (foundFreeEntry == FALSE) {                      \
+    DbgPrint("ntoskrn8: " # Name " overflow");      \
+    KeBugCheckEx(0xDEADBEEFL,                       \
+                (ULONG_PTR)BugNum1,                 \
+                (ULONG_PTR)BugNum2,                 \
+                (ULONG_PTR)BugNum3,                 \
+                0x0);                               \
+}
+
+
+#define FIND_DOUBLE_ENTRY_BEGIN(Name,Field,CompareValue)    \
+for (ULONG iii = 0; iii <= gLastEntry_##Name; iii++) {                    \
+    if (Array_##Name[iii].Field == ##CompareValue) {
+
+// FIND_DOUBLE_ENTRY BODY ...
+
+#define FIND_DOUBLE_ENTRY_END()                 \
+             break;                             \
+            }                                   \
+        }
+
+
+
+//for (ULONG i = 0; i <= gLastEntry_CreateProcessNotifyEx; i++) {
+            //    if (Array_CreateProcessNotifyEx[i].Routine == NotifyRoutine) { // double
+            //        status = STATUS_INVALID_PARAMETER;
+            //        break;
+            //    }
+            //}
+
+
 #define CLEANUP_ENTRY(Array,Field,ComparedValue,LastUsed_Entry)                \
-for (CLEANUP_Index = 0; CLEANUP_Index <= LastUsed_Entry; CLEANUP_Index++) {    \
+for (ULONG CLEANUP_Index = 0; CLEANUP_Index <= LastUsed_Entry; CLEANUP_Index++) {    \
     if (Array[CLEANUP_Index].Field == ComparedValue)                           \
     {                                                                          \
         Array[CLEANUP_Index].Field = NULL;                                     \
-	    if (CLEANUP_Index==LastUsed_Entry && LastUsed_Entry > 0) {             \
+        if (CLEANUP_Index==LastUsed_Entry && LastUsed_Entry > 0) {             \
             LastUsed_Entry--;                                                  \
-            for (CLEANUP_RevIndex=LastUsed_Entry; CLEANUP_RevIndex > 0; CLEANUP_RevIndex--) {  \
+            for (ULONG CLEANUP_RevIndex=LastUsed_Entry; CLEANUP_RevIndex > 0; CLEANUP_RevIndex--) {  \
                 if (Array[CLEANUP_RevIndex].Field == NULL)                     \
                     LastUsed_Entry= CLEANUP_RevIndex-1;                        \
                 else                                                           \
@@ -113,12 +126,12 @@ for (CLEANUP_Index = 0; CLEANUP_Index <= LastUsed_Entry; CLEANUP_Index++) {    \
 
 
 DEFINE_GUID(DUMMYGUID, 
-0xDEADBEEF, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+0xDEADBEEFL, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
 
-PWSTR const
+PWSTR static const
 dummy_pci_id = L"PCI\\CC_0C0330";
 
-PWSTR const
+PWSTR static const
 XhciCompatibleIdList[] = {
     L"PCI\\CC_0C0330"
 };
@@ -127,24 +140,26 @@ XhciCompatibleIdList[] = {
 //////////////////////////////////////////////////////////
 // static writable variables
 
-#define                 MAX_WorkerRoutineIndex  256
-WorkerRoutineArrayType  WorkerRoutineArray [MAX_WorkerRoutineIndex];
+static pVOID__VOID          g_pKeRevertToUserAffinityThread = NULL;
 
-#define                         MAX_CreateProcessNotifyEx  256
-CreateProcessNotifyExArrayType  CreateProcessNotifyExArray [MAX_CreateProcessNotifyEx];
+#define MAX_CreateProcessNotifyEx   256
+static ArrayType_CreateProcessNotifyEx Array_CreateProcessNotifyEx [MAX_CreateProcessNotifyEx];
 
-//pVOID                     g_pKeFlushQueuedDpcs            = NULL;
-//pfBOOLEAN__ULONG_ULONG    g_pExAcquireRundownProtectionEx = NULL;
-//pfULONG_ULONG             g_pExReleaseRundownProtectionEx = NULL;
-pVOID__VOID                 g_pKeRevertToUserAffinityThread = NULL;
+//#define MAX_LookasideListEx        1024
+//ArrayType_LookasideListEx       Array_LookasideListEx       [MAX_LookasideListEx];
 
-ULONG           g_LastUsedWorkerRoutineArray_Entry;
-ULONG           g_LastUsedCreateProcessNotifyExArray_Entry;
-KSPIN_LOCK      g_SpinWorkerRoutineArray;
-KSPIN_LOCK      g_SpinCreateProcessNotifyExArray;
-KIRQL           g_GuardedRegion_OldIrql;
-LONG            g_GuardedRegionCounter;
+static ULONG           gLastEntry_CreateProcessNotifyEx;
+static ULONG           gLastEntry_LookasideListEx;
 
+static KSPIN_LOCK      gSpin_CreateProcessNotifyEx;
+static KSPIN_LOCK      gSpin_LookasideListEx;
+
+
+/** KiServiceLinkage  (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64). */
+extern PFNRT                               g_pfnKiServiceLinkage;
+
+/** KiServiceInternal (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64) */
+extern PFNRT                               g_pfnKiServiceInternal;
 
 // static writable
 //////////////////////////////////////////////////////////
@@ -155,50 +170,24 @@ Initialize (PUNICODE_STRING  RegistryPath)
 {
     KLOCK_QUEUE_HANDLE  LockHandle;
 
-    g_GuardedRegionCounter = 0;
+    g_GuardedRegionCounter  = 0;
+    g_GuardedRegion_OldIrql = APC_LEVEL; // initial MAX irql
 
-    KeInitializeSpinLock(&g_SpinWorkerRoutineArray);
-    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
-    {
-        g_LastUsedWorkerRoutineArray_Entry = 0;
-        RtlZeroMemory(WorkerRoutineArray, sizeof(WorkerRoutineArray));
-    }
-    KeReleaseInStackQueuedSpinLock(&LockHandle);
-
-    KeInitializeSpinLock(&g_SpinCreateProcessNotifyExArray);
-    KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
-    {
-        g_LastUsedCreateProcessNotifyExArray_Entry = 0;
-        RtlZeroMemory(CreateProcessNotifyExArray, sizeof(CreateProcessNotifyExArray));
-    }
-    KeReleaseInStackQueuedSpinLock(&LockHandle);
-
+    KeInitializeSpinLock(&gSpin_CreateProcessNotifyEx);
+    KeInitializeSpinLock(&gSpin_LookasideListEx);
+    
+    gLastEntry_CreateProcessNotifyEx = 0;
+    gLastEntry_LookasideListEx = 0;
+    
+    RtlZeroMemory(Array_CreateProcessNotifyEx,  sizeof(Array_CreateProcessNotifyEx));
+    //RtlZeroMemory(Array_LookasideListEx,        sizeof(Array_LookasideListEx));
+    
 }
 
 
 void
 KeFlushQueuedDpcs_k8 (void)    // WinXP RTM, SP1
 {
-    /* TODO: find KeRevertToUserAffinityThread in ntoskrnl, g_pKeRevertToUserAffinityThread=
-    
-    PKTHREAD CurrentThread =     KeGetCurrentThread();
-    KPRIORITY PrevPriority =     KeSetPriorityThread(CurrentThread, HIGH_PRIORITY);
-
-    KAFFINITY ActiveProcessors = KeQueryActiveProcessors();
-    ULONG CurrentProcessor =     KeGetCurrentProcessorNumber();
-    KAFFINITY CurrentAffinity =  ActiveProcessors & ~((KAFFINITY) 1 << CurrentProcessor);
-    if (CurrentAffinity) {
-        do {
-            KeSetSystemAffinityThread_k8(CurrentAffinity);
-            CurrentAffinity &= ~((KAFFINITY) 1 << CurrentProcessor);
-        }
-        while (CurrentAffinity);
-            g_pKeRevertToUserAffinityThread();
-    }
-    
-    KeSetPriorityThread(CurrentThread, PrevPriority);
-    */
-    
     return; // do nothing as WinXP SP2 does
 }
 
@@ -216,19 +205,12 @@ RtlQueryRegistryValuesEx_k8 (
 
 
 NTSTATUS
-PoDisableSleepStates_k8 (ULONG a, ULONG b, ULONG c)        // undocumented
-{
-    return STATUS_SUCCESS;
-}
-
-
-NTSTATUS
 RtlCheckPortableOperatingSystem_k8 (PBOOLEAN IsPortable)    // RE win8_ntoskrnl
 {
     if (RtlCheckRegistryKey(RTL_REGISTRY_CONTROL, L"MiniNT") == STATUS_SUCCESS)
-        *IsPortable=TRUE;
+        *IsPortable = TRUE;
     else   
-        *IsPortable=FALSE;
+        *IsPortable = FALSE;
     
     return STATUS_SUCCESS;
 }
@@ -270,7 +252,7 @@ EtwRegister_k8 (
     PVOID               CallbackContext,
     PREGHANDLE          RegHandle )
 {
-    *RegHandle=(REGHANDLE)0; // is RegHandle=0 OK ?
+    *RegHandle = (REGHANDLE) 0; // is RegHandle=0 OK ?
     return STATUS_SUCCESS;
 }
 
@@ -364,7 +346,19 @@ EtwWriteString_k8 (
 
 
 NTSTATUS
-ZwAlpcConnectPort_k8 (                        // undocumented
+EtwRegisterClassicProvider_k8 (   // undocumented
+    PVOID Ptr,
+    ULONG Flags,
+    PVOID Callback,
+    PVOID a4,
+    PVOID a5)
+{
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS
+ZwAlpcConnectPort_k8 (                          // undocumented
     PHANDLE                     PortHandle,
     PUNICODE_STRING             PortName,
     POBJECT_ATTRIBUTES          ObjectAttributes,
@@ -382,7 +376,7 @@ ZwAlpcConnectPort_k8 (                        // undocumented
 
 
 NTSTATUS
-ZwAlpcSendWaitReceivePort_k8 (                // undocumented
+ZwAlpcSendWaitReceivePort_k8 (                  // undocumented
     HANDLE                      PortHandle,
     ULONG                       Flags,
     PPORT_MESSAGE               SendMessage,
@@ -394,7 +388,6 @@ ZwAlpcSendWaitReceivePort_k8 (                // undocumented
 {
     return STATUS_SUCCESS;
 }
-
 
 
 BOOLEAN
@@ -419,7 +412,7 @@ IoGetDevicePropertyData_k8 (
                         &DEVPKEY_Device_MatchingDeviceId,
                         sizeof(DEVPROPKEY)) ) {
         //TODO: find DeviceId on PDO
-        *Type=DEVPROP_TYPE_STRING;
+        *Type = DEVPROP_TYPE_STRING;
     }
 
     return STATUS_SUCCESS;
@@ -440,132 +433,104 @@ IoSetDevicePropertyData_k8 (
 }
 
 
-void
-IoQueueWorkItemCompatible (
-    PDEVICE_OBJECT  DeviceObject,
-    PVOID           Context )
+VOID
+IopProcessWorkItem_k8 (
+    PIO_WORKITEM_EX ioWorkItem
+    )
 {
-    ULONG                   i;
-    BOOLEAN                 foundContext = FALSE;
-    PIO_WORKITEM            IoWorkItem = NULL;
-    KLOCK_QUEUE_HANDLE      LockHandle;
-    PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx;
+    PDEVICE_OBJECT deviceObject = ioWorkItem->IoObject;
 
-    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
-    {
-        for (i = 0; i <= g_LastUsedWorkerRoutineArray_Entry; i++) {
-            if (WorkerRoutineArray[i].IoWorkItem != NULL &&
-                WorkerRoutineArray[i].Context == Context ) {         // match by Context
-                    foundContext    = TRUE;
-                    IoWorkItem      = WorkerRoutineArray[i].IoWorkItem;
-                    WorkerRoutineEx = WorkerRoutineArray[i].WorkerRoutineEx;
-
-                    WorkerRoutineArray[i].IoWorkItem = NULL;        // free entry
-                    
-                    // shrink WorkerRoutineArray if possible
-                    if (i == g_LastUsedWorkerRoutineArray_Entry && g_LastUsedWorkerRoutineArray_Entry > 0)
-                            g_LastUsedWorkerRoutineArray_Entry--;
-                    break;
-            }
-        }
-    }    
-    KeReleaseInStackQueuedSpinLock(&LockHandle); 
-
-    if (foundContext)
-        WorkerRoutineEx(DeviceObject, Context, IoWorkItem);
+    if (ioWorkItem->Type) // routine_ex
+        ioWorkItem->Routine( deviceObject,
+                             ioWorkItem->Context,
+                             ioWorkItem );
     else {
-        DbgPrint("ntoskrn8: IoQueueWork Context not found");
-        KeBugCheckEx(0xDEADBEEF, 0x0, (ULONG_PTR)Context, (ULONG_PTR)DeviceObject,  0x0);
+        PIO_WORKITEM_ROUTINE ClassicCall = (PIO_WORKITEM_ROUTINE) ioWorkItem->Routine;
+        ClassicCall( deviceObject, ioWorkItem->Context );
     }
-    
+
+    ObDereferenceObject( deviceObject );
 }
 
 
-void
-IoFreeWorkItem_k8 (
-    PIO_WORKITEM IoWorkItem )
+PIO_WORKITEM_EX
+IoAllocateWorkItem_inject (
+    PDEVICE_OBJECT DeviceObject
+    )
 {
-    ULONG               CLEANUP_Index, CLEANUP_RevIndex;
-    KLOCK_QUEUE_HANDLE  LockHandle;
+    PIO_WORKITEM_EX ioWorkItem;
+    PWORK_QUEUE_ITEM exWorkItem;
 
-    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
-    {
-     // 1) remove prepared entry from WorkerRoutineArray if IoFreeWorkItem called before IoQueueWorkItemCompatible
-     // 2) shrink WorkerRoutineArray
-     CLEANUP_ENTRY(WorkerRoutineArray, IoWorkItem, IoWorkItem, g_LastUsedWorkerRoutineArray_Entry)
+    ioWorkItem = (PIO_WORKITEM_EX) ExAllocatePoolWithTag( NonPagedPool, sizeof( IO_WORKITEM_EX ), '  oI');
+    if (ioWorkItem != NULL) {
+        ioWorkItem->IoObject = DeviceObject;
+        ioWorkItem->Type = 0;               // standart workitem
+
+        exWorkItem = &ioWorkItem->WorkItem;
+        exWorkItem->WorkerRoutine = (PWORKER_THREAD_ROUTINE) IopProcessWorkItem_k8;
+        exWorkItem->Parameter = ioWorkItem;
+        exWorkItem->List.Flink = NULL;
     }
-    KeReleaseInStackQueuedSpinLock(&LockHandle);    
 
-    IoFreeWorkItem(IoWorkItem);
+    return ioWorkItem;
 }
 
+
+#pragma warning(push)
+#pragma warning(disable : 4996) // 'ExQueueWorkItem': was declared deprecated
 
 void
 IoQueueWorkItemEx_k8 (
-    PIO_WORKITEM            IoWorkItem,
-    PIO_WORKITEM_ROUTINE_EX WorkerRoutineEx,
-    WORK_QUEUE_TYPE         QueueType,
-    PVOID                   Context )
+    PIO_WORKITEM_EX             IoWorkItem,
+    PIO_WORKITEM_ROUTINE_EX_k8  WorkerRoutineEx,
+    WORK_QUEUE_TYPE             QueueType,
+    PVOID                       Context )
 {
-    ULONG               i;
-    BOOLEAN             foundFreeEntry = FALSE;
-    KLOCK_QUEUE_HANDLE  LockHandle;
+    ObReferenceObject( IoWorkItem->IoObject );
 
-    KeAcquireInStackQueuedSpinLock(&g_SpinWorkerRoutineArray, &LockHandle);
-    {
-        // check for double
-        for (i = 0; i <= g_LastUsedWorkerRoutineArray_Entry; i++) {
-            if (WorkerRoutineArray[i].IoWorkItem != NULL &&
-                WorkerRoutineArray[i].Context == Context) { // double => bugcheck
-                    KeReleaseInStackQueuedSpinLock(&LockHandle);
-                    DbgPrint("ntoskrn8: WorkerRoutineArray double Context");
-                    KeBugCheckEx(0xDEADBEEF, 0x2, (ULONG_PTR)Context, (ULONG_PTR)IoWorkItem, 0x0);
-            }
-        }
-        
-        for (i = 0; i < MAX_WorkerRoutineIndex; i++) {
-            if (WorkerRoutineArray[i].IoWorkItem == NULL) {
-                foundFreeEntry = TRUE;
-                if (i > g_LastUsedWorkerRoutineArray_Entry)
-                            g_LastUsedWorkerRoutineArray_Entry = i;
-                WorkerRoutineArray[i].WorkerRoutineEx = WorkerRoutineEx;
-                WorkerRoutineArray[i].IoWorkItem      = IoWorkItem;
-                WorkerRoutineArray[i].Context         = Context;
-                break;
-            }
-        }
-    }
-    KeReleaseInStackQueuedSpinLock(&LockHandle);
+    IoWorkItem->Routine = WorkerRoutineEx;
+    IoWorkItem->Context = Context;
+    IoWorkItem->Type    = 1;            // WorkitemEx
 
-    if (foundFreeEntry) {
-        IoQueueWorkItem( IoWorkItem,
-                         (PIO_WORKITEM_ROUTINE) IoQueueWorkItemCompatible,
-                         QueueType,
-                         Context);
-    }
-    else {
-        DbgPrint("ntoskrn8: WorkerRoutineArray overflow");
-        KeBugCheckEx(0xDEADBEEF, 0x1, (ULONG_PTR)Context, (ULONG_PTR)IoWorkItem, 0x0);
-    }
-
+    ExQueueWorkItem( &IoWorkItem->WorkItem, QueueType );
 }
+
+void
+IoQueueWorkItem_inject (
+    PIO_WORKITEM_EX      IoWorkItem,
+    PIO_WORKITEM_ROUTINE WorkerRoutine,
+    WORK_QUEUE_TYPE      QueueType,
+    PVOID                Context )
+{
+    ObReferenceObject( IoWorkItem->IoObject );
+
+    IoWorkItem->Routine = (PIO_WORKITEM_ROUTINE_EX_k8) WorkerRoutine;
+    IoWorkItem->Context = Context;
+    IoWorkItem->Type    = 0;            // standart workitem
+
+    ExQueueWorkItem( &IoWorkItem->WorkItem, QueueType );
+}
+
+#pragma warning(pop)
 
 
 ULONG
 IoSizeofWorkItem_k8 (void)
 {
-    return sizeof(IO_WORKITEM);
+    return sizeof(IO_WORKITEM_EX);
 }
  
  
 void
 IoInitializeWorkItem_k8 (
-   PVOID        IoObject,
-   PIO_WORKITEM IoWorkItem )
-{
-    PIO_WORKITEM tmpWorkItem = IoAllocateWorkItem(IoObject);
-    RtlCopyMemory(IoWorkItem, tmpWorkItem, sizeof(IO_WORKITEM));
-    IoFreeWorkItem(tmpWorkItem);
+   PVOID           IoObject,
+   PIO_WORKITEM_EX IoWorkItem )
+{  
+    IoWorkItem->WorkItem.List.Flink = 0;
+    IoWorkItem->Type = 0;                   // standart workitem
+    IoWorkItem->IoObject = (PDEVICE_OBJECT) IoObject;
+    IoWorkItem->WorkItem.WorkerRoutine = (PWORKER_THREAD_ROUTINE) IopProcessWorkItem_k8;
+    IoWorkItem->WorkItem.Parameter = IoWorkItem;
 }
 
 
@@ -614,9 +579,9 @@ KeGetProcessorNumberFromIndex_k8 (              // RE procgrp.lib
     if (ProcIndex >= (ULONG)KeNumberProcessors)
         return STATUS_INVALID_PARAMETER;
         
-    ProcNumber->Group=          0;
-    ProcNumber->Number= (UCHAR) ProcIndex;
-    ProcNumber->Reserved=       0;
+    ProcNumber->Group    =  0;
+    ProcNumber->Number   =  (UCHAR) ProcIndex;
+    ProcNumber->Reserved =  0;
     return STATUS_SUCCESS;
 }
 
@@ -650,11 +615,11 @@ KeGetCurrentProcessorNumberEx_k8 (              // RE procgrp.lib
 {
     ULONG CurrentProcessorNumber;
     
-    CurrentProcessorNumber= KeGetCurrentProcessorNumber();
+    CurrentProcessorNumber = KeGetCurrentProcessorNumber();
     if (ProcNumber != NULL) {
-            ProcNumber->Group=           0;
-            ProcNumber->Number=  (UCHAR) CurrentProcessorNumber;
-            ProcNumber->Reserved=        0;
+            ProcNumber->Group    =  0;
+            ProcNumber->Number   =  (UCHAR) CurrentProcessorNumber;
+            ProcNumber->Reserved =  0;
     }
 
     return CurrentProcessorNumber;
@@ -693,12 +658,32 @@ KeQueryMaximumGroupCount_k8 (void)
 }
 
 
+VOID
+KeSetSystemAffinityThread_inject (
+    KAFFINITY Affinity
+    )
+
+// Windows XP KeSetSystemAffinityThread don't check Affinity for match with actual processors
+// Intel AHCI driver set affinity 0x111111110 even if OS have one-core CPU
+// TODO: check w2003 & x64 kernels   
+{
+    KAFFINITY AvailableAffinity;
+
+    AvailableAffinity = KeQueryActiveProcessors();
+    if ((Affinity & AvailableAffinity) == 0) { // bad requested affinity
+        Affinity = AvailableAffinity;
+    }
+
+    KeSetSystemAffinityThread(Affinity);
+}   
+
+
 KAFFINITY
 KeSetSystemAffinityThreadEx_k8 (                // RE procgrp.lib
     KAFFINITY Affinity )
 {
-    KeSetSystemAffinityThread_k8(Affinity);
-    return (KAFFINITY)0;
+    KeSetSystemAffinityThread_inject(Affinity);
+    return (KAFFINITY) 0;
 }
 
 
@@ -866,8 +851,7 @@ KeQueryLogicalProcessorRelationship_k8 (
     UCHAR       *Buffer;
     ULONG       Length            = 0;
     ULONG       Status;
-    ULONG       i;
-    ULONG       ProcessorCore;
+    //ULONG       ProcessorCore;
     PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX  NewEntry;
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION     *CurrentInfo;
     KAFFINITY   Mask;
@@ -879,7 +863,7 @@ KeQueryLogicalProcessorRelationship_k8 (
     KAFFINITY   ProcessorCoreMask = 1;
     KAFFINITY   TotalCoresMask    = 0;
 
-    Buffer = ExAllocatePoolWithTag( NonPagedPool, 65536 * sizeof(UCHAR), 200);
+    Buffer = (UCHAR *) ExAllocatePoolWithTag( NonPagedPool, 65536 * sizeof(UCHAR), 200);
 
     //TODO: Bug in NtQuerySystemInformation, it never report SMT detection
     Status = NtQuerySystemInformation( SystemLogicalProcessorInformation,
@@ -887,7 +871,7 @@ KeQueryLogicalProcessorRelationship_k8 (
                                      65536 * sizeof(UCHAR),
                                      &Length);
     if (!Status) {
-        for (i = 0; i < Length/(ULONG)sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i++)
+        for (ULONG i = 0; i < Length/(ULONG)sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i++)
         {
             CurrentInfo=(SYSTEM_LOGICAL_PROCESSOR_INFORMATION *) &Buffer[i * sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION)];
             if (CurrentInfo->Relationship == RelationProcessorCore) {
@@ -929,7 +913,7 @@ KeQueryLogicalProcessorRelationship_k8 (
  
 
     //TODO: Filter PROCESSOR_NUMBER
-    for (i = 0; i < TotalProcessors; i++) 
+    for (ULONG i = 0; i < TotalProcessors; i++) 
     {
         if (i != 0) {    // skip first time
             if (SMT)
@@ -970,7 +954,7 @@ KeQueryLogicalProcessorRelationship_k8 (
             CollectedLength += sizeof_ProcessorPackage;
         }
 
-        for (ProcessorCore = 0; ProcessorCore <= SMT; ProcessorCore++)
+        for (ULONG ProcessorCore = 0; ProcessorCore <= SMT; ProcessorCore++)
         {
             if (i != 0)             // skip first time
              ProcessorCoreMask = ProcessorCoreMask << 1;
@@ -1043,7 +1027,7 @@ KeQueryLogicalProcessorRelationship_k8 (
     }
 
     TotalCores = TotalProcessors + TotalProcessors*SMT;
-    for (i = 0; i < TotalCores; i++)
+    for (ULONG i = 0; i < TotalCores; i++)
     {
         TotalCoresMask =  TotalCoresMask | ((KAFFINITY)1 << i);
     }
@@ -1223,6 +1207,7 @@ PoUnregisterPowerSettingCallback_k8 (
     return STATUS_SUCCESS;    
 }
 
+
 typedef ULONG NODE_REQUIREMENT; 
 
 PVOID
@@ -1291,104 +1276,6 @@ MmAllocateContiguousNodeMemory_k8 (
 }
 
 
-void FASTCALL
-KeInitializeGuardedMutex_k8 (
-    PKGUARDED_MUTEX Mutex )
-{    
-    /*
-    {
-        volatile LONG Count;
-        PKTHREAD Owner;
-        ULONG Contention;
-        KGATE Gate;
-        union {
-           struct {
-            SHORT KernelApcDisable;
-            SHORT SpecialApcDisable;
-           };
-           ULONG CombinedApcDisable;
-        };
-    } KGUARDED_MUTEX
-    
-    {
-        volatile LONG Count;
-        PKTHREAD Owner;
-        ULONG Contention;
-        KEVENT Event;
-        ULONG OldIrql;
-    } FAST_MUTEX, */
-
-    ExInitializeFastMutex((PFAST_MUTEX)Mutex);
-
-}
-
-
-void FASTCALL
-KeAcquireGuardedMutex_k8 (
-  PKGUARDED_MUTEX  Mutex )
-{
-    ExAcquireFastMutex((PFAST_MUTEX)Mutex);
-}
-
-
-BOOLEAN FASTCALL
-KeTryToAcquireGuardedMutex_k8 (
-    PKGUARDED_MUTEX Mutex )
-{
-    return ExTryToAcquireFastMutex((PFAST_MUTEX)Mutex);
-}
-
-
-void FASTCALL
-KeReleaseGuardedMutex_k8 (
-    PKGUARDED_MUTEX Mutex )
-{
-    ExReleaseFastMutex((PFAST_MUTEX)Mutex);
-}
-
-
-void FASTCALL
-KeAcquireGuardedMutexUnsafe_k8 (
-    PKGUARDED_MUTEX FastMutex )
-{
-    ExAcquireFastMutexUnsafe((PFAST_MUTEX)FastMutex);
-}
-
-
-void FASTCALL
-KeReleaseGuardedMutexUnsafe_k8 (
-    PKGUARDED_MUTEX FastMutex )
-{
-    ExReleaseFastMutexUnsafe((PFAST_MUTEX)FastMutex);
-}
-
-
-// TODO trace OldIrql depend on caller
-void
-KeEnterGuardedRegion_k8 (void)
-{
-    if (g_GuardedRegionCounter < 1)
-        KeRaiseIrql(APC_LEVEL, &g_GuardedRegion_OldIrql);
-
-    KeEnterCriticalRegion();
-    InterlockedIncrement(&g_GuardedRegionCounter);
-}
-
-
-void
-KeLeaveGuardedRegion_k8 (void)
-{
-    KeLeaveCriticalRegion();
-    InterlockedDecrement(&g_GuardedRegionCounter);
-
-    if (g_GuardedRegionCounter < 1)
-        KeLowerIrql(g_GuardedRegion_OldIrql);
-
-    if (g_GuardedRegionCounter < 0)
-        InterlockedExchange(&g_GuardedRegionCounter, 0);    
-}
-
-
 NTSTATUS
 DummyProc (void)
 {
@@ -1413,23 +1300,36 @@ PoEndDeviceBusy_k8 (
 }
 
 
+NTSTATUS
+PoDisableSleepStates_k8 (ULONG a, ULONG b, ULONG c)         // undocumented
+{
+    return STATUS_SUCCESS;
+}
+
+
+void
+PoReenableSleepStates_k8 (ULONG a)                          // undocumented
+{
+    ;
+}
+
+
 // mark some routines for dynamic availablity
 const RoutineAddressType RoutineAddressEnabled[] = {    
-    { RTL_CONSTANT_STRING_k8(L"IoConnectInterruptEx"),     &IoConnectInterruptEx_k8    }, // wdf01000.sys 1.11.9200
-    { RTL_CONSTANT_STRING_k8(L"IoDisconnectInterruptEx"),  &IoDisconnectInterruptEx_k8 }, // wdf01000.sys 1.11.9200
+    { CONSTANT_STR(L"IoConnectInterruptEx"),     &IoConnectInterruptEx_k8    }, // wdf01000.sys 1.11.9200
+    { CONSTANT_STR(L"IoDisconnectInterruptEx"),  &IoDisconnectInterruptEx_k8 }, // wdf01000.sys 1.11.9200
 };
 
 
 PVOID
-MmGetSystemRoutineAddress_force (
+MmGetSystemRoutineAddress_inject (
     PUNICODE_STRING SystemRoutineName )
 {
-    ULONG    i;
     PVOID    Address = NULL;
 
     Address = MmGetSystemRoutineAddress(SystemRoutineName);
     if (Address == NULL) {
-        for (i = 0; i < ARRAYSIZE(RoutineAddressEnabled); i++) {
+        for (ULONG i = 0; i < ARRAYSIZE(RoutineAddressEnabled); i++) {
             if (RtlEqualUnicodeString(
                     &RoutineAddressEnabled[i].RoutineName,
                     SystemRoutineName, FALSE)) {
@@ -1617,7 +1517,11 @@ IoFreeSfioStreamIdentifier_k8 (
 }
 
 
+#if defined(_X86_)
+void __stdcall     // _stdcall - CREATE_PROCESS_NOTIFY_ROUTINE_asm accept this calling convection
+#else
 void
+#endif
 Create_Process_Notify_Routine_XP (
     HANDLE      ParentId,
     HANDLE      ProcessId,
@@ -1647,18 +1551,17 @@ Create_Process_Notify_Routine_XP (
 //                PspExitProcess  x64 2003
 // RSI - ProcessExit
 
-    ULONG                   i;
     PS_CREATE_NOTIFY_INFO   CreateInfo;
     PFILE_OBJECT            FileObject;
     PCUNICODE_STRING        CommandLine;        
     PCUNICODE_STRING        ImageFileName;
 
-    for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
-        if (CreateProcessNotifyExArray[i].Routine ==  NULL) // skip empty entry
+    for (ULONG i = 0; i <= gLastEntry_CreateProcessNotifyEx; i++) {
+        if (Array_CreateProcessNotifyEx[i].Routine ==  NULL) // skip empty entry
                 continue;
 
         if (Create == FALSE)                                // exit process
-                CreateProcessNotifyExArray[i].Routine(
+                Array_CreateProcessNotifyEx[i].Routine(
                                                 ProcessExit,
                                                 ProcessId,
                                                 NULL);
@@ -1676,7 +1579,7 @@ Create_Process_Notify_Routine_XP (
             CreateInfo.FileOpenNameAvailable = FALSE;   // or TRUE ?
             CreateInfo.CommandLine = NULL;
 
-            CreateProcessNotifyExArray[i].Routine(
+            Array_CreateProcessNotifyEx[i].Routine(
                                             ProcessCreate,
                                             ProcessId,
                                             &CreateInfo);
@@ -1697,36 +1600,29 @@ PsSetCreateProcessNotifyRoutineEx_k8 (
     PCREATE_PROCESS_NOTIFY_ROUTINE_EX NotifyRoutine,
     BOOLEAN Remove )
 {
-    ULONG               i, CLEANUP_Index, CLEANUP_RevIndex;
     KLOCK_QUEUE_HANDLE  LockHandle;
     NTSTATUS            status = STATUS_SUCCESS;
-
-    KeAcquireInStackQueuedSpinLock(&g_SpinCreateProcessNotifyExArray, &LockHandle);
+    BOOLEAN             foundFreeEntry = FALSE;
+    
+    KeAcquireInStackQueuedSpinLock(&gSpin_CreateProcessNotifyEx, &LockHandle);
     {
      if (Remove ==  FALSE) { // Add new callback
      
             // check for double
-            for (i = 0; i <= g_LastUsedCreateProcessNotifyExArray_Entry; i++) {
-                if (CreateProcessNotifyExArray[i].Routine == NotifyRoutine) { // double
-                    status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+            FIND_DOUBLE_ENTRY_BEGIN (CreateProcessNotifyEx, Routine, NotifyRoutine) {
+                status = STATUS_INVALID_PARAMETER;
             }
-
+            FIND_DOUBLE_ENTRY_END()
+            
             if (status != STATUS_INVALID_PARAMETER) {
-                for (i = 0; i < MAX_CreateProcessNotifyEx; i++) {
-                    if (CreateProcessNotifyExArray[i].Routine == NULL) {
-                        if (i > g_LastUsedCreateProcessNotifyExArray_Entry)
-                                    g_LastUsedCreateProcessNotifyExArray_Entry = i;
-
-                        CreateProcessNotifyExArray[i].Routine = NotifyRoutine;
-                        break;
-                    }
+                ADDENTRY_BEGIN (CreateProcessNotifyEx, Routine) {
+                    Array_CreateProcessNotifyEx[iii].Routine = NotifyRoutine;
                 }
+                ADDENTRY_END(CreateProcessNotifyEx, 0x3, NotifyRoutine, Remove)
             }
      }
      else                   // remove callback & shrink CreateProcessNotifyExArray
-         CLEANUP_ENTRY(CreateProcessNotifyExArray, Routine, NotifyRoutine, g_LastUsedCreateProcessNotifyExArray_Entry)
+         CLEANUP_ENTRY(Array_CreateProcessNotifyEx, Routine, NotifyRoutine, gLastEntry_CreateProcessNotifyEx)
     }
     KeReleaseInStackQueuedSpinLock(&LockHandle);
     
@@ -1770,6 +1666,7 @@ ExGetFirmwareEnvironmentVariable_k8 (
     return STATUS_NOT_IMPLEMENTED;
 }
 
+
 NTSTATUS
 ExSetFirmwareEnvironmentVariable_k8 (
     PUNICODE_STRING VariableName,
@@ -1782,23 +1679,900 @@ ExSetFirmwareEnvironmentVariable_k8 (
 }    
 
 
-void
-KeSetSystemAffinityThread_k8 (
-    KAFFINITY Affinity )
 
-// Windows XP KeSetSystemAffinityThread dont check Affinity for match with actual processors
-// Intel AHCI driver set affinity 0x111111110 even if OS have one-core CPU
-// TODO: check w2003 & x64 kernels   
+struct LicenseValueType {
+    UNICODE_STRING  Name;
+    ULONG           Type;
+    ULONG           Length;
+    UCHAR           Value[16];
+};
+
+
+#define ULONG_MAX 0xffffffffUL
+#define TYPE_DWORD  4
+#define TYPE_SZ     1
+#define LEN_0       0
+#define LEN_DWORD   4
+
+const struct LicenseValueType LicenseValueArray[] = {
+ //dxgkrnl.sys   
+ {CONSTANT_STR(L"Microsoft-Windows-Core-MaxHRes"),        TYPE_DWORD, LEN_DWORD, 0xFF, 0xFF, 0xFF, 0xFF },
+ {CONSTANT_STR(L"Microsoft-Windows-Core-MaxVRes"),        TYPE_DWORD, LEN_DWORD, 0xFF, 0xFF, 0xFF, 0xFF },
+ {CONSTANT_STR(L"Microsoft-Windows-Core-AllowMultiMon"),  TYPE_DWORD, LEN_DWORD, 0x01, 0x00, 0x00, 0x00 },
+  
+ //win32k.sys
+ {CONSTANT_STR(L"Security-SPP-GenuineLocalStatus"),            TYPE_DWORD, LEN_DWORD, 0x01, 0x00, 0x00, 0x00 },
+ {CONSTANT_STR(L"Security-SPP-Reserved-TBLProductKeyType"),    TYPE_DWORD, LEN_DWORD, 0x00, 0x00, 0x00, 0x00 },
+ {CONSTANT_STR(L"Security-SPP-Reserved-TBLRemainingTime"),     TYPE_DWORD, LEN_DWORD, 0x00, 0x00, 0x00, 0x00 },
+ {CONSTANT_STR(L"Security-SPP-TokenActivation-AdditionalInfo"),TYPE_SZ,    LEN_0,     0x00                   },
+ {CONSTANT_STR(L"Security-SPP-Reserved-TBLState"),             TYPE_DWORD, LEN_DWORD, 0x00, 0x00, 0x00, 0x00 },
+
+ //Microsoft-Windows-Core-MaximizeAlways
+ {CONSTANT_STR(L"Microsoft-Windows-Core-MaxTopLevelWinPerApp"),     TYPE_DWORD, LEN_DWORD, 0x00, 0x00, 0x00, 0x00 },
+ {CONSTANT_STR(L"Microsoft-Windows-Core-MaxConcurrentIApp"),        TYPE_DWORD, LEN_DWORD, 0x00, 0x00, 0x00, 0x00 },
+ {CONSTANT_STR(L"Microsoft-Windows-Core-ParentProcessDenyList"),    TYPE_SZ,    LEN_0,     0x00                   },
+ {CONSTANT_STR(L"Microsoft-Windows-Core-InstanceLimitExemptedApps"),TYPE_SZ,    LEN_0,     0x00                   },
+};
+
+
+NTSTATUS
+ZwQueryLicenseValue_k8 (
+    UNICODE_STRING *name,
+    ULONG *result_type,
+    PVOID data,
+    ULONG length,
+    ULONG *result_len)
 {
-    KAFFINITY AvailableAffinity;
+    BOOLEAN found=FALSE;
+    ULONG   Type, Length ;
+    UCHAR   *Value;
+    
+    if (!name || !name->Buffer || !name->Length || !result_len)
+        return STATUS_INVALID_PARAMETER;
+    
+    for (ULONG i = 0; i < ARRAYSIZE(LicenseValueArray); i++) {
+        if (RtlEqualUnicodeString( &LicenseValueArray[i].Name, name, FALSE)) {
+            found=  TRUE;
+            Type=            LicenseValueArray[i].Type;
+            Length=          LicenseValueArray[i].Length;
+            Value=  (UCHAR *)LicenseValueArray[i].Value;
+            break;
+        }
+    } 
+    
+    if (found == FALSE)
+        return STATUS_OBJECT_NAME_NOT_FOUND;
+    
+    if (result_type)
+        *result_type = Type;
+            
+    *result_len = Length;              
+ 
+    if (length < Length)
+        return STATUS_BUFFER_TOO_SMALL;
+    
+    if (data)
+        RtlCopyMemory(data, Value, Length); 
+        
+    return STATUS_SUCCESS;
+}
 
-    AvailableAffinity = KeQueryActiveProcessors();
-    if ((Affinity & AvailableAffinity) == 0) { // bad requested affinity
-        Affinity = AvailableAffinity;
+
+BOOLEAN
+PsIsProtectedProcess_k8 (PEPROCESS Process)
+{
+    const char *pszImageFile = (const char *)Process->ImageFileName;
+    if (!pszImageFile)
+        return FALSE;
+
+    if (!_stricmp(pszImageFile, "CSRSS.EXE"))
+        return TRUE;
+    
+    return FALSE;
+}
+
+
+NTSTATUS
+ZwAllocateLocallyUniqueId_k8 (PLUID Luid)
+{
+    return NtAllocateLocallyUniqueId(Luid);
+}
+
+
+KPRIORITY
+KeSetActualBasePriorityThread_k8 (
+    PKTHREAD Thread,
+    KPRIORITY Priority )
+{
+    KPRIORITY PrevBasePriority= Thread->BasePriority;
+    
+    Thread->BasePriority=(SCHAR)Priority;
+    
+    if (Thread->Priority != (SCHAR)Priority) {
+        KeSetPriorityThread(Thread, Priority);
+    }
+    
+    return PrevBasePriority;
+}
+
+
+VOID FASTCALL
+KeInvalidateRangeAllCaches_k8 (
+    PCHAR BaseAddress,
+    ULONG Length )
+{
+    CHAR  *Addr;
+    CHAR  *EndAddr;
+    ULONG  IncAddr;
+    // IncAddr = [PEB+3BCh];
+    // cache line size=  (bits 8-15 of EBX CPUID(EAX=1)
+    // shr     ebx, 5
+    // and     ebx, 11111111000b
+    
+    ULONG OutEax,OutEbx,OutEcx,OutEdx;
+    CPU_INFO CPU_Info;
+    
+    #if defined(_X86_)  // x32
+        CPUID(1, &OutEax, &OutEbx, &OutEcx, &OutEdx);
+    #else               // x64
+        KiCpuId(0x1, 0, &CPU_Info);
+        OutEax=CPU_Info.Eax;
+        OutEbx=CPU_Info.Ebx;
+        OutEcx=CPU_Info.Ecx;
+        OutEdx=CPU_Info.Edx;
+    #endif
+    
+    if ( (OutEdx & (1L < 19)) == 1) {    //clflush features if CPUID.01H:EDX[bit 19]=1
+        Addr    = BaseAddress;
+        IncAddr = (OutEbx >> 5) & 0x07F8UL;  // OutEbx= CacheLine Size, 11111111000b
+        EndAddr = BaseAddress + Length - 1;
+        while (Addr <= EndAddr )
+        {
+            _mm_clflush(Addr);
+            Addr += IncAddr;
+        }
+    }
+    else {
+        KeInvalidateAllCaches_k8();
+    }
+    
+}
+
+
+typedef NTSTATUS
+(*PFNNTQUERYVIRTUALMEMORY) (
+    HANDLE,
+    void const *,
+    MEMORY_INFORMATION_CLASS,
+    PVOID,
+    SIZE_T,
+    PSIZE_T);
+
+// x32
+extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0xB2;
+extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0xBA;
+
+// x64
+extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0x1F;
+extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0x20;
+
+
+NTSTATUS
+ZwQueryVirtualMemory_k8 (   // taken from virtualbox
+    HANDLE  Handle,
+    void const * Ptr,
+    MEMORY_INFORMATION_CLASS Class,
+    PVOID Ptr2,
+    SIZE_T Size,
+    PSIZE_T Size2)
+{    
+    PFNNTQUERYVIRTUALMEMORY JumpAddr;
+
+#if defined(_X86_)
+    uint8_t const *pbCode  = (uint8_t const *)(uintptr_t)ZwQueryVolumeInformationFile;
+        
+    if (*pbCode == 0xb8) /* mov eax, dword */
+     switch (*(uint32_t const *)&pbCode[1]) {
+        case 0xb3: JumpAddr= (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0xB2; break; /* XP SP1/2/3 */
+        case 0xbb: JumpAddr= (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0xBA; break; /* W2K3 R2 SP2 */
+     }
+#else // x64
+     uint8_t const *pbCode = (uint8_t const *)(uintptr_t)ZwRequestWaitReplyPort;
+     if (  pbCode[ 0] == 0x48   /* mov rax, rsp */
+        && pbCode[ 1] == 0x8b
+        && pbCode[ 2] == 0xc4
+        && pbCode[ 3] == 0xfa   /* cli */
+        && pbCode[ 4] == 0x48   /* sub rsp, 10h */
+        && pbCode[ 5] == 0x83
+        && pbCode[ 6] == 0xec
+        && pbCode[ 7] == 0x10
+        && pbCode[ 8] == 0x50   /* push rax */
+        && pbCode[ 9] == 0x9c   /* pushfq */
+        && pbCode[10] == 0x6a   /* push 10 */
+        && pbCode[11] == 0x10
+        && pbCode[12] == 0x48   /* lea rax, [nt!KiServiceLinkage] */
+        && pbCode[13] == 0x8d
+        && pbCode[14] == 0x05
+        && pbCode[19] == 0x50   /* push rax */
+        && pbCode[20] == 0xb8   /* mov eax,1fh <- the syscall no. */
+        /*&& pbCode[21] == 0x1f*/
+        && pbCode[22] == 0x00
+        && pbCode[23] == 0x00
+        && pbCode[24] == 0x00
+        && pbCode[25] == 0xe9   /* jmp KiServiceInternal */ )
+     {
+        uint8_t const *pbKiServiceInternal = &pbCode[30] + *(int32_t const *)&pbCode[26];
+        uint8_t const *pbKiServiceLinkage  = &pbCode[19] + *(int32_t const *)&pbCode[15];
+        if (*pbKiServiceLinkage == 0xc3)
+        {
+            g_pfnKiServiceInternal = (PFNRT)pbKiServiceInternal;
+            g_pfnKiServiceLinkage  = (PFNRT)pbKiServiceLinkage;
+            switch (pbCode[21])
+            {
+                case 0x1e: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x1F; break;
+                case 0x1f: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x20; break;
+                //case 0x20: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x21; break;
+                //case 0x21: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x22; break;
+                //case 0x22: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x23; break;
+            }
+        }
+        }
+# endif
+
+    return JumpAddr(
+        Handle,
+        Ptr,
+        Class,
+        Ptr2,
+        Size,
+        Size2);
+}
+
+ 
+PVOID
+ExAllocatePoolEx (
+    POOL_TYPE PoolType,
+    SIZE_T    NumberOfBytes,
+    ULONG     Tag,
+    PLOOKASIDE_LIST_EX Lookaside )
+{
+    return ExAllocatePoolWithTag(PoolType, NumberOfBytes, Tag);
+}
+
+
+void
+ExFreePoolEx(
+    PVOID  Buffer,
+    PLOOKASIDE_LIST_EX  Lookaside )
+{
+    ExFreePoolWithTag(Buffer, 0);
+}
+
+
+NTSTATUS
+ExInitializeLookasideListEx_k8 (
+    PLOOKASIDE_LIST_EX      LookasideEx,
+    PALLOCATE_FUNCTION_EX   AllocateEx,
+    PFREE_FUNCTION_EX       FreeEx,
+    POOL_TYPE               PoolType,
+    ULONG                   Flags,
+    SIZE_T                  Size,
+    ULONG                   Tag,
+    USHORT                  Depth )
+{
+    PALLOCATE_FUNCTION  AllocateExFunc = (PALLOCATE_FUNCTION) AllocateEx;
+    PFREE_FUNCTION      FreeExFunc     = (PFREE_FUNCTION)     FreeEx;
+    KLOCK_QUEUE_HANDLE  LockHandle;
+    BOOLEAN             foundFreeEntry = FALSE;
+        
+    if (PoolType & 0xFFFFFE18L || (PoolType & 3) == 3 ) // 11111111111111111111111000011000
+          return STATUS_INVALID_PARAMETER_4;
+    
+    if (Size <= 4)
+            Size = 4;
+    
+    if (AllocateExFunc == NULL)
+            AllocateExFunc= (PALLOCATE_FUNCTION) ExAllocatePoolEx;
+          
+    if (FreeExFunc == NULL)
+            FreeExFunc= (PFREE_FUNCTION) ExFreePoolEx;
+
+/*
+        Flags &= 1; // XP support only pool allocation flag
+        ADDENTRY_BEGIN (LookasideListEx, LookasideEx) {
+            Array_LookasideListEx[iii].AllocateEx= AllocateEx;
+            Array_LookasideListEx[iii].FreeEx =    FreeEx;
+            Array_LookasideListEx[iii].LookasideEx = LookasideEx;
+        }
+        ADDENTRY_END(LookasideListEx, 0x4, LookasideEx, Size)
+            
+    }
+*/
+    
+    if (PoolType & 1) {                         // PagedPool
+        ExInitializePagedLookasideList(
+           (PPAGED_LOOKASIDE_LIST)  LookasideEx,
+                                    AllocateExFunc,
+                                    FreeExFunc,
+                                    Flags,
+                                    Size,
+                                    Tag,
+                                    Depth );
+    }
+    else {                                      // NonPagedPool
+        ExInitializeNPagedLookasideList(
+           (PNPAGED_LOOKASIDE_LIST) LookasideEx,
+                                    AllocateExFunc,
+                                    FreeExFunc,
+                                    Flags,
+                                    Size,
+                                    Tag,
+                                    Depth );
+    }
+    
+    return STATUS_SUCCESS;
+}
+
+
+void
+ExDeleteLookasideListEx_k8 (
+    PLOOKASIDE_LIST_EX Lookaside )
+{
+    if (Lookaside->L.Type & 1) {                  // PagedPool
+      ExDeletePagedLookasideList( (PPAGED_LOOKASIDE_LIST) Lookaside);
+    }
+    else {                                      // NonPagedPool     
+      ExDeleteNPagedLookasideList((PNPAGED_LOOKASIDE_LIST) Lookaside);
+    }
+        
+}
+
+
+NTSTATUS
+RtlQueryElevationFlags_k8 (ULONG *Result)
+{
+    *Result=0;
+    return STATUS_SUCCESS;
+}
+
+
+void
+PsEnterPriorityRegion_k8 (void)
+{
+    ;
+}
+
+
+void
+PsLeavePriorityRegion_k8 (void)
+{
+    ;
+}
+
+
+PVOID
+ExEnterPriorityRegionAndAcquireResourceExclusive_k8 (PERESOURCE Resource)
+{
+    return ExEnterCriticalRegionAndAcquireResourceExclusive_k8(Resource);
+}
+
+
+PVOID
+ExEnterPriorityRegionAndAcquireResourceShared_k8 (PERESOURCE Resource)
+{
+    return ExEnterCriticalRegionAndAcquireResourceShared_k8(Resource);
+}
+
+
+VOID FASTCALL
+ExReleaseResourceAndLeavePriorityRegion_k8 (PERESOURCE Resource)
+{
+    ExReleaseResourceAndLeaveCriticalRegion_k8(Resource);
+}
+
+
+NTSTATUS
+PsAcquireProcessExitSynchronization_k8 (PEPROCESS Process)
+{
+    ULONG_PTR       Value, NewValue;
+    PEX_RUNDOWN_REF RundownProtect;
+    
+    RundownProtect=&Process->RundownProtect;
+    Value = RundownProtect->Count & 0xFFFFFFFEL;
+    NewValue = Value + EX_RUNDOWN_COUNT_INC;
+
+    #if !defined(_WIN64)
+        NewValue=(ULONG_PTR) InterlockedCompareExchange(
+                            (LONG *)RundownProtect,
+                            NewValue,
+                            Value);
+    #else
+        NewValue=(ULONG_PTR) InterlockedCompareExchange64(
+                            (LONG64 *)RundownProtect,
+                            NewValue,
+                            Value);
+    #endif
+    
+    if (Value==NewValue) {
+        return STATUS_SUCCESS;
+    } else {
+    
+        if (ExAcquireRundownProtection(RundownProtect) == FALSE) {
+            return STATUS_PROCESS_IS_TERMINATING;
+        }
+        else {
+            return STATUS_SUCCESS;
+        }
+    }
+}
+
+
+void
+PsReleaseProcessExitSynchronization_k8 (PEPROCESS Process)
+{
+    ULONG_PTR       Value, NewValue;
+    PEX_RUNDOWN_REF RundownProtect;
+    
+    RundownProtect=&Process->RundownProtect;
+    Value = RundownProtect->Count & 0xFFFFFFFEL;
+    NewValue = Value - EX_RUNDOWN_COUNT_INC;
+
+    #if !defined(_WIN64)
+        NewValue=(ULONG_PTR) InterlockedCompareExchange(
+                            (LONG *)RundownProtect,
+                            NewValue,
+                            Value);
+    #else
+        NewValue=(ULONG_PTR) InterlockedCompareExchange64(
+                            (LONG64 *)RundownProtect,
+                            NewValue,
+                            Value);
+    #endif
+
+    if (Value != NewValue)
+        ExReleaseRundownProtection(RundownProtect);
+}
+
+
+// typedef struct _DUMMY_FILE_OBJECT {
+//  OBJECT_HEADER ObjectHeader;
+//  CHAR FileObjectBody[ sizeof( FILE_OBJECT ) ];
+// } DUMMY_FILE_OBJECT, *PDUMMY_FILE_OBJECT;
+
+
+POBJECT_TYPE
+ObGetObjectType_k8 (PVOID Object) {
+    POBJECT_HEADER  ObjectHeader;
+    
+    ObjectHeader = OBJECT_TO_OBJECT_HEADER(Object);
+    return ObjectHeader->Type;
+}
+
+
+FORCEINLINE POBJECT_HEADER_NAME_INFO
+OBJECT_HEADER_TO_NAME_INFO_EXISTS (
+    IN POBJECT_HEADER ObjectHeader
+    )
+{
+    return (POBJECT_HEADER_NAME_INFO)((PUCHAR)ObjectHeader -
+                                      ObjectHeader->NameInfoOffset);
+}
+
+
+FORCEINLINE POBJECT_HEADER_NAME_INFO
+OBJECT_HEADER_TO_NAME_INFO (
+    IN POBJECT_HEADER ObjectHeader )
+{
+    POBJECT_HEADER_NAME_INFO nameInfo;
+
+    if (ObjectHeader->NameInfoOffset != 0) {
+        nameInfo = OBJECT_HEADER_TO_NAME_INFO_EXISTS(ObjectHeader);
+    } else {
+        nameInfo = NULL;
     }
 
-    KeSetSystemAffinityThread(Affinity);
-}    
+    return nameInfo;
+}
+
+
+POBJECT_HEADER_NAME_INFO
+ObQueryNameInfo_k8 (PVOID Object) {
+    POBJECT_HEADER  ObjectHeader;
+    POBJECT_HEADER_NAME_INFO NameInfo;
+        
+    ObjectHeader = OBJECT_TO_OBJECT_HEADER(Object);
+    NameInfo =     OBJECT_HEADER_TO_NAME_INFO(ObjectHeader);
+    
+    return NameInfo;
+}
+
+
+void
+PoUserShutdownInitiated_k8 (void)
+{
+    ;
+}
+
+
+//TODO: chech x64 args 
+NTSTATUS 
+LdrResFindResource_k8 (
+    PVOID                       DllHandle,
+    ULONG_PTR                   Type,
+    ULONG_PTR                   Name,
+    ULONG_PTR                   Lang,
+    ULONG_PTR                  *ResourcePtr,
+    ULONG                      *Size,
+    ULONG                       a7,
+    ULONG                       a8,
+    ULONG                       Flags)
+{
+    NTSTATUS                    Status; 
+    ULONG_PTR                   IdPath[3];
+    PIMAGE_RESOURCE_DATA_ENTRY  ResourceDataEntry;
+    
+    IdPath[0] = Type;
+    IdPath[1] = Name;
+    IdPath[2] = Lang;
+    
+    Status = LdrFindResource_U(
+                DllHandle,
+                IdPath,
+                3,
+                &ResourceDataEntry );
+                
+    if (Status != STATUS_SUCCESS)
+        return STATUS_RESOURCE_DATA_NOT_FOUND;
+    
+    *ResourcePtr=0;
+    Status = LdrAccessResource(
+                    DllHandle,
+                    ResourceDataEntry,
+          (PVOID *) ResourcePtr,
+                    Size );
+                
+    return Status;
+                
+}
+
+
+//TODO: check x64 args 
+NTSTATUS 
+LdrResFindResourceDirectory_k8 (
+    PVOID                       DllHandle,
+    ULONG_PTR                   Type,
+    ULONG_PTR                   Lang,
+    PIMAGE_RESOURCE_DIRECTORY  *ResourceDirectory,
+    ULONG                       a6,
+    ULONG                       a7,
+    ULONG                       a8 )
+{
+
+    NTSTATUS                  Status; 
+    ULONG_PTR                 IdPath[1];
+        
+    IdPath[0] = Type;
+    
+    Status = LdrFindResourceDirectory_U(
+                DllHandle,
+                IdPath,
+                1,
+                ResourceDirectory);
+                
+    return Status;
+}
+
+
+NTSTATUS
+DbgkLkmdRegisterCallback_k8 (
+                PVOID CallBack,
+                PVOID Context,
+                ULONG Mode)
+{
+    return STATUS_SUCCESS;
+}
+
+
+
+////////////////////////////////////////////////////////////
+// msrpc.sys stubs, please ignore
+
+#define RPC_VAR_ENTRY   __cdecl
+#define RPC_ENTRY       __stdcall
+#define __RPC_FAR
+
+
+typedef struct _MIDL_STUB_DESC
+{
+    void  *    RpcInterfaceInformation;
+    //
+} MIDL_STUB_DESC;
+
+
+typedef const MIDL_STUB_DESC  * PMIDL_STUB_DESC;
+
+typedef long RPC_STATUS;
+
+typedef const unsigned char  * PFORMAT_STRING;
+
+
+// hack
+typedef void  * CLIENT_CALL_RETURN;
+
+
+typedef struct _RPC_ASYNC_STATE {
+    unsigned int    Size; // size of this structure
+    //
+} RPC_ASYNC_STATE, *PRPC_ASYNC_STATE;
+
+typedef void * I_RPC_HANDLE;
+typedef I_RPC_HANDLE RPC_BINDING_HANDLE;
+typedef void __RPC_FAR * RPC_IF_HANDLE;
+
+
+typedef struct _RPC_BINDING_HANDLE_TEMPLATE_V1_W {
+    unsigned long Version;
+    unsigned long Flags;
+    unsigned long ProtocolSequence;
+    unsigned short *NetworkAddress;
+    unsigned short *StringEndpoint;
+    union
+    {
+        unsigned short *Reserved;
+    } u1;
+    UUID ObjectUuid;
+} RPC_BINDING_HANDLE_TEMPLATE_V1_W, *PRPC_BINDING_HANDLE_TEMPLATE_V1_W;
+
+
+typedef struct _RPC_BINDING_HANDLE_SECURITY_V1_W {
+    unsigned long Version;
+    //
+} RPC_BINDING_HANDLE_SECURITY_V1_W, *PRPC_BINDING_HANDLE_SECURITY_V1_W;
+
+
+typedef struct _RPC_BINDING_HANDLE_OPTIONS_V1 {
+    unsigned long Version;
+    unsigned long Flags;
+    unsigned long ComTimeout;
+    unsigned long CallTimeout;
+} RPC_BINDING_HANDLE_OPTIONS_V1, *PRPC_BINDING_HANDLE_OPTIONS_V1;
+
+
+RPC_STATUS 
+RpcBindingBind (
+    PRPC_ASYNC_STATE pAsync,
+    RPC_BINDING_HANDLE Binding,
+    RPC_IF_HANDLE IfSpec )
+{
+    return STATUS_INVALID_PARAMETER;
+}
+
+
+RPC_STATUS
+RpcBindingCreateW (
+    RPC_BINDING_HANDLE_TEMPLATE_V1_W * Template,
+    RPC_BINDING_HANDLE_SECURITY_V1_W * Security,
+    RPC_BINDING_HANDLE_OPTIONS_V1 * Options,
+    RPC_BINDING_HANDLE * Binding )
+{
+    return STATUS_INVALID_PARAMETER;
+}
+
+
+RPC_STATUS
+RpcBindingCopy (
+    RPC_BINDING_HANDLE SourceBinding,
+    RPC_BINDING_HANDLE __RPC_FAR * DestinationBinding )
+{
+    return STATUS_INVALID_PARAMETER;
+}
+
+
+RPC_STATUS
+RpcBindingFree (
+    RPC_BINDING_HANDLE __RPC_FAR * Binding )
+{
+    return STATUS_SUCCESS;
+}
+
+
+RPC_STATUS 
+RpcBindingUnbind (
+    RPC_BINDING_HANDLE Binding )
+{
+    return STATUS_SUCCESS;
+}
+
+
+RPC_STATUS
+RpcAsyncInitializeHandle (
+    PRPC_ASYNC_STATE pAsync,
+    unsigned int     Size )
+{
+    return STATUS_INVALID_PARAMETER;
+}
+
+
+RPC_STATUS
+RpcAsyncCompleteCall (
+    PRPC_ASYNC_STATE pAsync,
+    void *Reply )
+{
+    return STATUS_INVALID_PARAMETER;
+}
+
+
+RPC_STATUS
+RpcAsyncCancelCall (
+    PRPC_ASYNC_STATE pAsync,
+    BOOLEAN fAbort )
+{
+    return STATUS_INVALID_PARAMETER;
+}
+
+
+CLIENT_CALL_RETURN RPC_VAR_ENTRY
+NdrAsyncClientCall(
+    PMIDL_STUB_DESC         pStubDescriptor,
+    PFORMAT_STRING          pFormat,
+    ...
+    )
+{
+    return (CLIENT_CALL_RETURN)NULL;
+}
+
+
+PVOID
+I_RpcGetCompleteAndFreeRoutine ()
+{
+    return NULL;
+}
+
+
+int 
+RPC_ENTRY
+I_RpcExceptionFilter (
+    unsigned long ExceptionCode )
+{
+    return 0;
+}
+
+
+
+NTSTATUS
+MmRotatePhysicalView_k8 (
+    PVOID               VirtualAddress,
+    PSIZE_T             NumberOfBytes,
+    PMDLX               NewMdl,
+    MM_ROTATE_DIRECTION Direction,
+    PMM_ROTATE_COPY_CALLBACK_FUNCTION CopyFunction,
+    PVOID               Context )
+{
+    return STATUS_SUCCESS;
+}
+
+
+/*
+#define gWin32KServiceTblMAX 825     // win7 win32k.sys W32pServiceTable size=825 
+ULONG_PTR  gWin32KServiceTbl [gWin32KServiceTblMAX];
+UCHAR      gWin32KServiceArgs[gWin32KServiceTblMAX];
+
+
+BOOLEAN
+KeAddSystemServiceTable_win32k (        // win7 win32k.sys W32pServiceTable patcher
+    PULONG_PTR  Base,
+    PULONG      Count,
+    ULONG       Limit,
+    PUCHAR      Arguments,
+    ULONG       Index )
+{
+    
+    for (ULONG i=0; i<= gWin32KServiceTblMAX; i++) {
+        gWin32KServiceTbl[i]  = Base[i];
+        gWin32KServiceArgs[i] = Arguments[i];
+    }
+       
+    
+    return KeAddSystemServiceTable (
+                gWin32KServiceTbl,
+                Count,
+                Limit,
+                gWin32KServiceArgs,
+                Index );
+}
+*/
+
+
+NTSTATUS
+ZwPowerInformation_inject (
+    POWER_INFORMATION_LEVEL InformationLevel,
+    PVOID                   InputBuffer,
+    ULONG                   InputBufferLength,
+    PVOID                   OutputBuffer,
+    ULONG                   OutputBufferLength )
+{
+    switch (InformationLevel) {
+    case 0x29:                                  // Sleep TimeOuts
+        RtlZeroMemory(OutputBuffer, 0x1C);
+        return STATUS_SUCCESS;
+        break;
+    case 0x1D:                                  // PopConsoleDisplayState
+        RtlZeroMemory(OutputBuffer, 0x04);
+        return STATUS_SUCCESS;
+        break;
+        
+    case 0x1E:
+        return STATUS_SUCCESS;
+        break;
+        
+    case 0x1F:
+        return STATUS_SUCCESS;
+        break;
+        
+    case 0x2A:
+        return STATUS_SUCCESS;
+        break;
+        
+    case 0x2F:
+        return STATUS_SUCCESS;
+        break;
+        
+    default:
+        return ZwPowerInformation(
+                    InformationLevel,
+                    InputBuffer,
+                    InputBufferLength,
+                    OutputBuffer,
+                    OutputBufferLength );
+    }
+}
+
+#define SE_GROUP_MANDATORY          0x00000001
+#define SE_GROUP_ENABLED_BY_DEFAULT 0x00000002
+#define SE_GROUP_ENABLED            0x00000004
+#define SE_GROUP_OWNER              0x00000008
+#define SE_GROUP_USE_FOR_DENY_ONLY  0x00000010
+#define SE_GROUP_INTEGRITY          0x00000020
+#define SE_GROUP_INTEGRITY_ENABLED  0x00000040
+#define SE_GROUP_LOGON_ID           0xC0000000
+#define SE_GROUP_RESOURCE           0x20000000
+#define SE_GROUP_VALID_ATTRIBUTES   0xE000007F
+
+static const SID high_level = {SID_REVISION, 1, {SECURITY_MANDATORY_LABEL_AUTHORITY},
+                                                            {SECURITY_MANDATORY_HIGH_RID}};
+
+NTSTATUS
+SeQueryInformationToken_inject (                                // wine
+    PACCESS_TOKEN           Token,
+    TOKEN_INFORMATION_CLASS TokenInformationClass,
+    PVOID                  *TokenInformation )
+{
+    TOKEN_MANDATORY_LABEL  *tml;
+    PSID                    psid;
+    
+    switch (TokenInformationClass) {
+    case TokenIntegrityLevel:
+         /* report always "S-1-16-12288" (high mandatory level) for now */
+            tml = (TOKEN_MANDATORY_LABEL *) Token;
+            psid = tml + 1;
+
+            tml->Label.Sid = psid;
+            tml->Label.Attributes = SE_GROUP_INTEGRITY | SE_GROUP_INTEGRITY_ENABLED;
+            memcpy(psid, &high_level, sizeof(SID)); 
+            *TokenInformation=psid;
+        return STATUS_SUCCESS;
+        break;
+    case TokenUIAccess:
+        *TokenInformation= NULL;
+        return STATUS_SUCCESS;
+        break;
+    default:
+        return SeQueryInformationToken(
+                    Token,
+                    TokenInformationClass,
+                    TokenInformation );
+    }
+}
 
 
 
@@ -1810,6 +2584,11 @@ DriverEntry (                   // Dummy entry
 {
     return STATUS_SUCCESS;
 }
+
+
+#ifdef DEBUG_TESTS
+    #include "tests.c"
+#endif    
 
 
 NTSTATUS
@@ -1826,6 +2605,10 @@ DllInitialize (                // Main entry
     Initialize(RegistryPath);
     PsSetCreateProcessNotifyRoutine((PCREATE_PROCESS_NOTIFY_ROUTINE)&CREATE_PROCESS_NOTIFY_ROUTINE_asm, FALSE);
 
+#ifdef DEBUG_TESTS
+    RunTests();
+#endif
+
     return STATUS_SUCCESS;
 }
 
@@ -1838,5 +2621,8 @@ DllUnload (void)
     return STATUS_SUCCESS;
 }
 
+#ifdef __cplusplus
+}
+#endif
 
 #include "ntoskrnl_redirects.h"

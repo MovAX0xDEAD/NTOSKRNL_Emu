@@ -1,6 +1,12 @@
 #########################################################################
+
 USE_NOLIBS=1
 BUFFER_OVERFLOW_CHECKS=0
+NT_UP=0
+USECXX_FLAG=1
+#_X86PAE_
+#BUILD_ALLOW_LINKER_WARNINGS=1
+
 
 USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
 # /P /Fiheaders/
@@ -9,6 +15,7 @@ USER_C_FLAGS=$(USER_C_FLAGS) /FAs /Faasm/
 #!if $(386)
 #MSC_OPTIMIZATION=$(MSC_OPTIMIZATION) /arch:IA32 #disable sse
 #!endif
+
 #########################################################################
 
 
@@ -18,9 +25,10 @@ TARGETPATH=obj$(BUILD_ALT_DIR)
 
 
 # ntstrsafe need for _memcpy
-TARGETLIBS=	$(DDK_LIB_PATH)\ntoskrnl.lib  \
-		$(DDK_LIB_PATH)\ntstrsafe.lib \
+TARGETLIBS=	$(DDK_LIB_PATH)\ntstrsafe.lib \
                 ..\ntoskrn8\$(O)\ntoskrn8.lib \
+
+
 
 !if $(386)
 TARGETLIBS=$(TARGETLIBS) ..\i386\storport.lib
@@ -33,8 +41,13 @@ SOURCES=	..\storpor8.c  \
                 ..\wrk2003.c   \
                 ..\common.c
 
-I386_SOURCES=   ..\storpor8_stubs.asm
 
-AMD64_SOURCES=  ..\storpor8_stubs.asm
+I386_SOURCES=   ..\wrk2003_helpers.asm \
+                ..\storpor8_stubs.asm
+
+
+AMD64_SOURCES=  ..\wrk2003_helpers.asm \
+                ..\storpor8_stubs.asm
+
 
 DLLDEF=$(OBJ_PATH)\$(O)\storpor8.def

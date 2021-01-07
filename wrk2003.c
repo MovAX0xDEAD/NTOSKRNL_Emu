@@ -1,42 +1,17 @@
 #include <ntddk.h> 
-#include "wrk2003.h"
 #include "common.h"
+#include "wrk2003.h"
 
-/*++
-
-Copyright (c) Microsoft Corporation. All rights reserved. 
-
-You may only use this code if you agree to the terms of the Windows Research Kernel Source Code License agreement (see License.txt).
-If you do not agree to the terms, do not use the code.
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
-Module Name:
+const LARGE_INTEGER MmShortTime = {(ULONG)(-10 * 1000 * 10), -1}; // 10 milliseconds
 
-    rundown.c
+KIRQL           g_GuardedRegion_OldIrql;
+LONG            g_GuardedRegionCounter;
 
-Abstract:
-
-    This module houses routine that do safe rundown of data structures.
-
-    The basic principle of these routines is to allow fast protection of a data structure that is torn down
-    by a single thread. Threads wishing to access the data structure attempt to obtain rundown protection via
-    calling ExAcquireRundownProtection. If this function returns TRUE then accesses are safe until the protected
-    thread calls ExReleaseRundownProtection. The single teardown thread calls ExWaitForRundownProtectionRelease
-    to mark the rundown structure as being run down and the call will return once all protected threads have
-    released their protection references.
-
-    Rundown protection is not a lock. Multiple threads may gain rundown protection at the same time.
-
-    The rundown structure has the following format:
-
-    Bottom bit set   : This is a pointer to a rundown wait block (aligned on at least a word boundary)
-    Bottom bit clear : This is a count of the total number of accessors multiplied by 2 granted rundown protection.
-
-Revision History:
-
-    Add per-processor cache-aware rundown protection APIs
-
---*/
 
 
 BOOLEAN FASTCALL
@@ -44,23 +19,6 @@ ExAcquireRundownProtectionEx_k8 (
      __inout PEX_RUNDOWN_REF RunRef,
      __in ULONG Count
      )
-/*++
-
-Routine Description:
-
-    Reference a rundown block preventing rundown occurring if it hasn't already started
-    This routine is NON-PAGED because it is being called on the paging path.
-
-Arguments:
-
-    RunRef - Rundown block to be referenced
-    Count  - Number of references to add
-
-Return Value:
-
-    BOOLEAN - TRUE - rundown protection was acquired, FALSE - rundown is active or completed
-
---*/
 {
     ULONG_PTR Value, NewValue;
 
@@ -98,23 +56,6 @@ ExReleaseRundownProtectionEx_k8 (
      __inout PEX_RUNDOWN_REF RunRef,
      __in ULONG Count
      )
-/*
-
-Routine Description:
-
-    Dereference a rundown block and wake the rundown thread if we are the last to exit
-    This routine is NON-PAGED because it is being called on the paging path.
-
-Arguments:
-
-    RunRef - Rundown block to have its reference released
-    Count  - Number of reference to remove
-
-Return Value:
-
-    None
-
-*/
 {
     ULONG_PTR Value, NewValue;
 
@@ -151,6 +92,10 @@ Return Value:
                 //
                 KeSetEvent (&WaitBlock->WakeEvent, 0, FALSE);
             }
+#if defined (_DUMMYNOTEPADFIX) 
+            }
+#endif    
+            
             return;
         } else {
             //
@@ -180,81 +125,12 @@ Return Value:
 }
 
 
-PEX_RUNDOWN_REF
-FORCEINLINE
-EXP_GET_CURRENT_RUNDOWN_REF(
-    IN PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
-    )
-/*++
-
-Routine Description
-
-    Returns the per-processor cache-aligned rundown ref structure for
-    the current processor
-
-Arguments
-
-    RunRefCacheAware - Pointer to cache-aware rundown ref structure
-
-Return Value:
-
-    Pointer to a per-processor rundown ref
---*/
-{
-    return ((PEX_RUNDOWN_REF) (((PUCHAR) RunRefCacheAware->RunRefs) +
-                               (KeGetCurrentProcessorNumber() % RunRefCacheAware->Number) * RunRefCacheAware->RunRefSize));
-}
-
-
-PEX_RUNDOWN_REF
-FORCEINLINE
-EXP_GET_PROCESSOR_RUNDOWN_REF(
-    IN PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
-    IN ULONG Index
-    )
-/*++
-
-Routine Description
-
-    Returns the per-processor cache-aligned rundown ref structure for given processor
-
-Arguments
-
-    RunRefCacheAware - Pointer to cache-aware rundown ref structure
-    Index - Index of the processor
-
-Return Value:
-
-    Pointer to a per-processor rundown ref
---*/
-{
-    return ((PEX_RUNDOWN_REF) (((PUCHAR) RunRefCacheAware->RunRefs) +
-                                (Index % RunRefCacheAware->Number) * RunRefCacheAware->RunRefSize));
-}
-
 
 PEX_RUNDOWN_REF_CACHE_AWARE
-ExAllocateCacheAwareRundownProtection_k8(
+ExAllocateCacheAwareRundownProtection_k8 (
     __in POOL_TYPE PoolType,
     __in ULONG PoolTag
     )
-/*++
-
-Routine Description:
-
-    Allocate a cache-friendly rundown ref structure for MP scenarios
-
-Arguments
-
-    PoolType - Type of pool to allocate from
-    PoolTag -  Tag used for the pool allocation
-
-Return Value
-
-    Pointer to cache-aware rundown ref structure
-
-    NULL if out of memory
---*/
 {
 
     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware;
@@ -265,7 +141,7 @@ Return Value
 
 
 
-    RunRefCacheAware = ExAllocatePoolWithTag (PoolType,
+    RunRefCacheAware = (PEX_RUNDOWN_REF_CACHE_AWARE) ExAllocatePoolWithTag (PoolType,
                                               sizeof( EX_RUNDOWN_REF_CACHE_AWARE ),
                                               PoolTag
                                               );
@@ -294,7 +170,7 @@ Return Value
         //
         RunRefCacheAware->RunRefSize = PaddedSize;
 
-        RunRefPool = ExAllocatePoolWithTag (PoolType,
+        RunRefPool = (PEX_RUNDOWN_REF) ExAllocatePoolWithTag (PoolType,
                                             PaddedSize * RunRefCacheAware->Number,
                                             PoolTag);
 
@@ -317,16 +193,16 @@ Return Value
             //
             //  Allocate enough padding so we can start the refs on an aligned boundary
             //
-            RunRefPool = ExAllocatePoolWithTag (PoolType,
+            RunRefPool = (PEX_RUNDOWN_REF) ExAllocatePoolWithTag (PoolType,
                                                 PaddedSize * RunRefCacheAware->Number + PaddedSize,
                                                 PoolTag);
 
-            if (RunRefPool == NULL) {
+if (RunRefPool == NULL) {
                 ExFreePool (RunRefCacheAware);
                 return NULL;
             }
 
-            CurrentRunRef = EXP_ALIGN_UP_PTR_ON_BOUNDARY (RunRefPool, PaddedSize);
+            CurrentRunRef = (PEX_RUNDOWN_REF) EXP_ALIGN_UP_PTR_ON_BOUNDARY (RunRefPool, PaddedSize);
 
         } else {
 
@@ -353,23 +229,9 @@ Return Value
 
 
 SIZE_T
-ExSizeOfRundownProtectionCacheAware_k8(
+ExSizeOfRundownProtectionCacheAware_k8 (
     VOID
     )
-/*++
-
-Routine Description:
-
-    Returns recommended size for a cache-friendly rundown structure
-
-Arguments
-
-    None
-
-Return Value
-
-    Recommended size in bytes
---*/
 {
     SIZE_T RundownSize;
     ULONG PaddedSize;
@@ -405,32 +267,10 @@ Return Value
 
 
 VOID
-ExInitializeRundownProtectionCacheAware_k8(
+ExInitializeRundownProtectionCacheAware_k8 (
     __out PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
     __in SIZE_T RunRefSize
     )
-/*++
-
-Routine Description:
-
-    Initializes an embedded cache aware rundown structure.
-    This is for drivers who like to allocate this structure as part of their 
-    device extension. Callers of this routine must have obtained the required size
-    via a call to ExSizeOfCacheAwareRundownProtection and passed a pointer to that 
-    structure. 
-   
-    NOTE:  
-    This structure should NOT be freed via ExFreeCacheAwareRundownProtection().
-
-Arguments
-
-    RunRefCacheAware    - Pointer to structure to be initialized allocated in non-paged memory
-    RunRefSize          - Size returned by call to ExSizeOfCacheAwareRundownProtection
-
-Return Value
-
-    None
---*/
 {
     PEX_RUNDOWN_REF CurrentRunRef;
     ULONG PaddedSize;
@@ -458,7 +298,7 @@ Return Value
 
         Number =  ArraySize / PaddedSize - 1;
 
-        CurrentRunRef = EXP_ALIGN_UP_PTR_ON_BOUNDARY (CurrentRunRef , PaddedSize);
+        CurrentRunRef = (PEX_RUNDOWN_REF) EXP_ALIGN_UP_PTR_ON_BOUNDARY (CurrentRunRef , PaddedSize);
     }
 
     RunRefCacheAware->RunRefs = CurrentRunRef;
@@ -482,24 +322,9 @@ Return Value
 
 
 VOID
-ExFreeCacheAwareRundownProtection_k8(
+ExFreeCacheAwareRundownProtection_k8 (
     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
     )
-/*++
-
-Routine Description:
-
-    Free a cache-friendly rundown ref structure
-
-Arguments
-
-    RunRef - pointer to cache-aware rundown ref structure
-
-Return Value
-
-    None
-
---*/
 {
 
 
@@ -514,24 +339,8 @@ Return Value
 BOOLEAN
 FASTCALL
 ExAcquireRundownProtectionCacheAware_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
      )
-/*++
-
-Routine Description:
-
-    Reference a rundown block preventing rundown occurring if it hasn't already started
-    This routine is NON-PAGED because it is being called on the paging path.
-
-Arguments:
-
-    RunRefCacheAware - Rundown block to be referenced
-
-Return Value:
-
-    BOOLEAN - TRUE - rundown protection was acquired, FALSE - rundown is active or completed
-
---*/
 {
    return ExAcquireRundownProtection (EXP_GET_CURRENT_RUNDOWN_REF (RunRefCacheAware));
 }
@@ -540,24 +349,8 @@ Return Value:
 VOID
 FASTCALL
 ExReleaseRundownProtectionCacheAware_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
      )
-/*++
-
-Routine Description:
-
-    Dereference a rundown block and wake the rundown thread if we are the last to exit
-    This routine is NON-PAGED because it is being called on the paging path.
-
-Arguments:
-
-    RunRefCacheAware - Cache aware rundown block to have its reference released
-
-Return Value:
-
-    None
-
---*/
 {
     ExReleaseRundownProtection (EXP_GET_CURRENT_RUNDOWN_REF (RunRefCacheAware));
 }
@@ -566,26 +359,9 @@ Return Value:
 BOOLEAN
 FASTCALL
 ExAcquireRundownProtectionCacheAwareEx_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
-     __in ULONG Count
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
+     ULONG Count
      )
-/*++
-
-Routine Description:
-
-    Reference a rundown block preventing rundown occurring if it hasn't already started
-    This routine is NON-PAGED because it is being called on the paging path.
-
-Arguments:
-
-    RunRefCacheAware - Rundown block to be referenced
-    Count  - Number of references to add
-
-Return Value:
-
-    BOOLEAN - TRUE - rundown protection was acquired, FALSE - rundown is active or completed
-
---*/
 {
    return ExAcquireRundownProtectionEx (EXP_GET_CURRENT_RUNDOWN_REF (RunRefCacheAware), Count);
 }
@@ -594,26 +370,9 @@ Return Value:
 VOID
 FASTCALL
 ExReleaseRundownProtectionCacheAwareEx_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
-     __in ULONG Count
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
+     ULONG Count
      )
-/*++
-
-Routine Description:
-
-    Dereference a rundown block and wake the rundown thread if we are the last to exit
-    This routine is NON-PAGED because it is being called on the paging path.
-
-Arguments:
-
-    RunRef - Cache aware rundown block to have its reference released
-    Count  - Number of reference to remove
-
-Return Value:
-
-    None
-
---*/
 {
     ExReleaseRundownProtectionEx (EXP_GET_CURRENT_RUNDOWN_REF (RunRefCacheAware), Count);
 }
@@ -622,23 +381,8 @@ Return Value:
 VOID
 FASTCALL
 ExWaitForRundownProtectionReleaseCacheAware_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
      )
-/*++
-
-Routine Description:
-
-    Wait till all outstanding rundown protection calls have exited
-
-Arguments:
-
-    RunRefCacheAware -  Pointer to a rundown structure
-
-Return Value:
-
-    None
-
---*/
 {
     PEX_RUNDOWN_REF RunRef;
     EX_RUNDOWN_WAIT_BLOCK WaitBlock;
@@ -740,6 +484,10 @@ Return Value:
                                    NULL);
 
         }
+#if defined (_DUMMYNOTEPADFIX) 
+        }
+#endif    
+                  
     }
 
     return;
@@ -749,23 +497,8 @@ Return Value:
 VOID
 FASTCALL
 ExReInitializeRundownProtectionCacheAware_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
      )
-/*++
-
-Routine Description:
-
-    Reinitialize rundown protection structure after its been rundown
-
-Arguments:
-
-    RunRef - Rundown block to be referenced
-
-Return Value:
-
-    None
-
---*/
 {
     PEX_RUNDOWN_REF RunRef;
     ULONG Index;
@@ -782,21 +515,8 @@ Return Value:
 VOID
 FASTCALL
 ExRundownCompletedCacheAware_k8 (
-     __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
+     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
      )
-/*++
-Routine Description:
-
-    Mark rundown block has having completed rundown so we can wait again safely.
-
-Arguments:
-
-    RunRef - Rundown block to be referenced
-
-Return Value:
-
-    None
---*/
 {
     PEX_RUNDOWN_REF RunRef;
     ULONG Index;
@@ -813,9 +533,19 @@ PVOID
 ExEnterCriticalRegionAndAcquireResourceExclusive_k8 (
     PERESOURCE Resource )
 {
-	KeEnterCriticalRegion();
-	ExAcquireResourceExclusiveLite(Resource, TRUE);
-	return PsGetThreadWin32Thread(KeGetCurrentThread());
+    KeEnterCriticalRegion();
+    ExAcquireResourceExclusiveLite(Resource, TRUE);
+    return PsGetThreadWin32Thread(KeGetCurrentThread());
+}
+
+
+PVOID
+ExEnterCriticalRegionAndAcquireResourceShared_k8 (
+    PERESOURCE Resource )
+{
+    KeEnterCriticalRegion();
+    ExAcquireResourceSharedLite(Resource, TRUE);
+    return PsGetThreadWin32Thread(KeGetCurrentThread());
 }
 
 
@@ -823,8 +553,8 @@ VOID FASTCALL
 ExReleaseResourceAndLeaveCriticalRegion_k8 (
     PERESOURCE Resource )
 {
-	ExReleaseResourceLite(Resource);
-	KeLeaveCriticalRegion();
+    ExReleaseResourceLite(Resource);
+    KeLeaveCriticalRegion();
 }
 
 
@@ -846,50 +576,12 @@ ExReleaseResourceAndLeaveCriticalRegion_k8 (
 
 
 NTSTATUS
-NTAPI
-RtlImageNtHeaderEx(
+RtlImageNtHeaderEx_k8 (
     ULONG Flags,
     PVOID Base,
     ULONG64 Size,
-    OUT PIMAGE_NT_HEADERS * OutHeaders
+    PIMAGE_NT_HEADERS * OutHeaders
     )
-
-/*++
-
-Routine Description:
-
-    This function returns the address of the NT Header.
-
-    This function is a bit complicated.
-    It is this way because RtlImageNtHeader that it replaces was hard to understand,
-      and this function retains compatibility with RtlImageNtHeader.
-
-    RtlImageNtHeader was #ifed such as to act different in each of the three
-        boot loader, kernel, usermode flavors.
-
-    boot loader -- no exception handling
-    usermode -- limit msdos header to 256meg, catch any exception accessing the msdos-header
-                or the pe header
-    kernel -- don't cross user/kernel boundary, don't catch the exceptions,
-                no 256meg limit
-
-Arguments:
-
-    Flags - RTL_IMAGE_NT_HEADER_EX_FLAG_NO_RANGE_CHECK -- don't be so picky
-                about the image, for compatibility with RtlImageNtHeader
-    Base - Supplies the base of the image.
-    Size - The size of the view, usually larger than the size of the file on disk.
-            This is available from NtMapViewOfSection but not from MapViewOfFile.
-    OutHeaders -
-
-Return Value:
-
-    STATUS_SUCCESS -- everything ok
-    STATUS_INVALID_IMAGE_FORMAT -- bad filesize or signature value
-    STATUS_INVALID_PARAMETER -- bad parameters
-
---*/
-
 {
     PIMAGE_NT_HEADERS NtHeaders = 0;
     ULONG e_lfanew = 0;
@@ -981,50 +673,25 @@ Exit:
 }
 #undef EXIT
 
+
 PIMAGE_NT_HEADERS
-NTAPI
-RtlImageNtHeader(
+RtlImageNtHeader_k8 (
     PVOID Base
     )
 {
     PIMAGE_NT_HEADERS NtHeaders = NULL;
-    (VOID)RtlImageNtHeaderEx(RTL_IMAGE_NT_HEADER_EX_FLAG_NO_RANGE_CHECK, Base, 0, &NtHeaders);
+    (VOID)RtlImageNtHeaderEx_k8(RTL_IMAGE_NT_HEADER_EX_FLAG_NO_RANGE_CHECK, Base, 0, &NtHeaders);
     return NtHeaders;
 }
 
 
 
 PIMAGE_SECTION_HEADER
-RtlSectionTableFromVirtualAddress (
-    IN PIMAGE_NT_HEADERS NtHeaders,
-    IN PVOID Base,
-    IN ULONG Address
+RtlSectionTableFromVirtualAddress_k8 (
+   PIMAGE_NT_HEADERS NtHeaders,
+   PVOID Base,
+   ULONG Address
     )
-
-/*++
-
-Routine Description:
-
-    This function locates a VirtualAddress within the image header
-    of a file that is mapped as a file and returns a pointer to the
-    section table entry for that virtual address
-
-Arguments:
-
-    NtHeaders - Supplies the pointer to the image or data file.
-
-    Base - Supplies the base of the image or data file.
-
-    Address - Supplies the virtual address to locate.
-
-Return Value:
-
-    NULL - The file does not contain data for the specified directory entry.
-
-    NON-NULL - Returns the pointer of the section entry containing the data.
-
---*/
-
 {
     ULONG i;
     PIMAGE_SECTION_HEADER NtSection;
@@ -1044,40 +711,15 @@ Return Value:
 
 
 PVOID
-RtlAddressInSectionTable (
-    IN PIMAGE_NT_HEADERS NtHeaders,
-    IN PVOID Base,
-    IN ULONG Address
+RtlAddressInSectionTable_k8 (
+   PIMAGE_NT_HEADERS NtHeaders,
+   PVOID Base,
+   ULONG Address
     )
-
-/*++
-
-Routine Description:
-
-    This function locates a VirtualAddress within the image header
-    of a file that is mapped as a file and returns the seek address
-    of the data the Directory describes.
-
-Arguments:
-
-    NtHeaders - Supplies the pointer to the image or data file.
-
-    Base - Supplies the base of the image or data file.
-
-    Address - Supplies the virtual address to locate.
-
-Return Value:
-
-    NULL - The file does not contain data for the specified directory entry.
-
-    NON-NULL - Returns the address of the raw data the directory describes.
-
---*/
-
 {
     PIMAGE_SECTION_HEADER NtSection;
 
-    NtSection = RtlSectionTableFromVirtualAddress( NtHeaders,
+    NtSection = RtlSectionTableFromVirtualAddress_k8( NtHeaders,
                                                    Base,
                                                    Address
                                                  );
@@ -1092,11 +734,11 @@ Return Value:
 
 
 PVOID
-RtlpImageDirectoryEntryToData32 (
-    IN PVOID Base,
-    IN BOOLEAN MappedAsImage,
-    IN USHORT DirectoryEntry,
-    OUT PULONG Size,
+RtlpImageDirectoryEntryToData32_k8 (
+   PVOID Base,
+   BOOLEAN MappedAsImage,
+   USHORT DirectoryEntry,
+    PULONG Size,
     PIMAGE_NT_HEADERS32 NtHeaders
     )
 {
@@ -1121,16 +763,16 @@ RtlpImageDirectoryEntryToData32 (
         return( (PVOID)((PCHAR)Base + DirectoryAddress) );
     }
 
-    return( RtlAddressInSectionTable((PIMAGE_NT_HEADERS)NtHeaders, Base, DirectoryAddress ));
+    return( RtlAddressInSectionTable_k8((PIMAGE_NT_HEADERS)NtHeaders, Base, DirectoryAddress ));
 }
 
 
 PVOID
-RtlpImageDirectoryEntryToData64 (
-    IN PVOID Base,
-    IN BOOLEAN MappedAsImage,
-    IN USHORT DirectoryEntry,
-    OUT PULONG Size,
+RtlpImageDirectoryEntryToData64_k8 (
+   PVOID Base,
+   BOOLEAN MappedAsImage,
+   USHORT DirectoryEntry,
+    PULONG Size,
     PIMAGE_NT_HEADERS64 NtHeaders
     )
 {
@@ -1155,47 +797,17 @@ RtlpImageDirectoryEntryToData64 (
         return( (PVOID)((PCHAR)Base + DirectoryAddress) );
     }
 
-    return( RtlAddressInSectionTable((PIMAGE_NT_HEADERS)NtHeaders, Base, DirectoryAddress ));
+    return( RtlAddressInSectionTable_k8((PIMAGE_NT_HEADERS)NtHeaders, Base, DirectoryAddress ));
 }
 
 
-
-
 PVOID
-RtlImageDirectoryEntryToData (
-    IN PVOID Base,
-    IN BOOLEAN MappedAsImage,
-    IN USHORT DirectoryEntry,
-    OUT PULONG Size
+RtlImageDirectoryEntryToData_k8 (
+   PVOID Base,
+   BOOLEAN MappedAsImage,
+   USHORT DirectoryEntry,
+    PULONG Size
     )
-
-/*++
-
-Routine Description:
-
-    This function locates a Directory Entry within the image header
-    and returns either the virtual address or seek address of the
-    data the Directory describes.
-
-Arguments:
-
-    Base - Supplies the base of the image or data file.
-
-    MappedAsImage - FALSE if the file is mapped as a data file.
-                  - TRUE if the file is mapped as an image.
-
-    DirectoryEntry - Supplies the directory entry to locate.
-
-    Size - Return the size of the directory.
-
-Return Value:
-
-    NULL - The file does not contain data for the specified directory entry.
-
-    NON-NULL - Returns the address of the raw data the directory describes.
-
---*/
-
 {
     PIMAGE_NT_HEADERS NtHeaders;
 
@@ -1204,19 +816,19 @@ Return Value:
         MappedAsImage = FALSE;
         }
 
-    NtHeaders = RtlImageNtHeader(Base);
+    NtHeaders = RtlImageNtHeader_k8(Base);
 
     if (!NtHeaders)
         return NULL;
 
     if (NtHeaders->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
-        return (RtlpImageDirectoryEntryToData32(Base,
+        return (RtlpImageDirectoryEntryToData32_k8(Base,
                                                 MappedAsImage,
                                                 DirectoryEntry,
                                                 Size,
                                                 (PIMAGE_NT_HEADERS32)NtHeaders));
     } else if (NtHeaders->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
-        return (RtlpImageDirectoryEntryToData64(Base,
+        return (RtlpImageDirectoryEntryToData64_k8(Base,
                                                 MappedAsImage,
                                                 DirectoryEntry,
                                                 Size,
@@ -1229,30 +841,10 @@ Return Value:
 
 
 PVOID
-MiFindExportedRoutineByName (
-    IN PVOID DllBase,
-    IN PANSI_STRING AnsiImageRoutineName
+MiFindExportedRoutineByName_k8 (
+   PVOID DllBase,
+   PANSI_STRING AnsiImageRoutineName
     )
-
-/*++
-
-Routine Description:
-
-    This function searches the argument module looking for the requested
-    exported function name.
-
-Arguments:
-
-    DllBase - Supplies the base address of the requested module.
-
-    AnsiImageRoutineName - Supplies the ANSI routine name being searched for.
-
-Return Value:
-
-    The virtual address of the requested routine or NULL if not found.
-
---*/
-
 {
     USHORT OrdinalNumber;
     PULONG NameTableBase;
@@ -1266,7 +858,7 @@ Return Value:
     PVOID FunctionAddress;
     PIMAGE_EXPORT_DIRECTORY ExportDirectory;
 
-    ExportDirectory = (PIMAGE_EXPORT_DIRECTORY) RtlImageDirectoryEntryToData (
+    ExportDirectory = (PIMAGE_EXPORT_DIRECTORY) RtlImageDirectoryEntryToData_k8 (
                                 DllBase,
                                 TRUE,
                                 IMAGE_DIRECTORY_ENTRY_EXPORT,
@@ -1289,7 +881,7 @@ Return Value:
     NameOrdinalTableBase = (PUSHORT)((PCHAR)DllBase + (ULONG)ExportDirectory->AddressOfNameOrdinals);
 
     //
-    // Lookup the desired name in the name table using a binary search.
+    // Lookup the desired namethe name table using a binary search.
     //
 
     Low = 0;
@@ -1359,4 +951,823 @@ Return Value:
 }
 
 
+HANDLE
+PsGetCurrentThreadProcessId_k8 ( VOID )
+{
+    //return PsGetCurrentProcessId();
+    return ((PETHREAD)KeGetCurrentThread())->Cid.UniqueProcess;
+}
 
+
+BOOLEAN
+KeAreAllApcsDisabled_k8 (VOID)      // XP Only
+{   
+    return (BOOLEAN)((KeGetCurrentThread()->KernelApcDisable != 0) ||
+                     (KeGetCurrentIrql() >= APC_LEVEL));
+}
+
+
+VOID
+__wbinvd (VOID);
+#pragma intrinsic(__wbinvd)
+
+
+
+BOOLEAN
+KeInvalidateAllCaches_k8 (VOID)
+{
+    //TODO: implement to pattern
+    //  WIN XP3
+    //  55 8B EC 51 83 3D _F8 53 48 00_ 06 73 07
+    
+    #if defined(_X86_) 
+        _asm {
+            // wbinvd
+            _emit 0Fh
+            _emit 09h
+        }
+    #else
+        __wbinvd();
+    #endif
+    
+    return TRUE;
+}
+
+
+VOID FASTCALL
+ExEnterCriticalRegionAndAcquireFastMutexUnsafe_k8 (
+    PFAST_MUTEX FastMutex
+    )
+{
+    KeEnterCriticalRegion();
+    ExAcquireFastMutexUnsafe(FastMutex);
+}
+
+
+VOID FASTCALL
+ExReleaseFastMutexUnsafeAndLeaveCriticalRegion_k8 (
+    PFAST_MUTEX FastMutex
+    )
+{
+
+    ExReleaseFastMutexUnsafe(FastMutex);
+    KeLeaveCriticalRegion();
+    return;
+}
+
+
+PVOID
+PsGetCurrentThreadWin32Thread_k8 (
+    VOID
+     )
+{
+    return PsGetThreadWin32Thread(KeGetCurrentThread());
+}
+
+
+PVOID
+PsGetCurrentProcessWin32Process_k8 (
+    VOID
+    )
+{
+    return PsGetCurrentProcess()->Win32Process;
+}
+
+PVOID
+PsGetCurrentThreadTeb_k8 (
+    VOID
+    )
+{
+    return PsGetCurrentThread()->Tcb.Teb;
+}
+
+
+BOOLEAN
+PsIsSystemProcess_k8 (
+    PEPROCESS Process
+     )
+{
+    return (BOOLEAN)(Process == PsInitialSystemProcess);
+}
+
+
+ULONG
+MmGetSessionIdEx_k8 (
+    IN PEPROCESS Process
+    )
+{
+    PMM_SESSION_SPACE SessionGlobal;
+
+    if (Process->Vm.Flags.SessionLeader == 1) {
+
+        //
+        // smss may transiently have a session space but that's of no interest
+        // to our caller.
+        //
+
+        return (ULONG)-1;
+    }
+
+    //
+    // The Session field of the EPROCESS is never cleared once set so these
+    // checks can be done lock free.
+    //
+
+    SessionGlobal = (PMM_SESSION_SPACE) Process->Session;
+
+    if (SessionGlobal == NULL) {
+
+        //
+        // The system process has no session space.
+        //
+
+        return (ULONG)-1;
+    }
+
+    return SessionGlobal->SessionId;
+}
+
+
+
+ULONG
+PsGetProcessSessionIdEx_k8 (
+    PEPROCESS Process
+    )
+{
+    return MmGetSessionIdEx_k8 (Process);
+}
+
+
+PEPROCESS
+PsGetCurrentThreadProcess_k8 (
+    VOID
+    )
+{
+    return THREAD_TO_PROCESS(PsGetCurrentThread());
+}
+
+
+PVOID
+PsGetCurrentThreadWin32ThreadAndEnterCriticalRegion_k8 (
+    PHANDLE ProcessId
+     )
+{
+    PETHREAD Thread = PsGetCurrentThread();
+    *ProcessId = Thread->Cid.UniqueProcess;
+    KeEnterCriticalRegionThread(&Thread->Tcb);
+    return Thread->Tcb.Win32Thread;
+}
+
+
+
+BOOLEAN
+KeAlertThread_k8 (
+    PKTHREAD Thread,
+    KPROCESSOR_MODE AlertMode )
+{
+/*
+
+TODO: hex inject    
+XP:
+55 8B EC 83 EC 0C 53 56 8B 75 08 8D 8E E8 00 00 00 8D 55 F4 FF
+
+2003:
+
+KeSuspendThread, ...
+KeAlertThread ntoskrnl.exe
+
+55 8B EC 83 EC 0C 53 56 8B 75 08    8D 4E 44 8D 55 F4 FF
+
+KeAlertThread +
+KeAlertResumeThread    
+
+55 8B EC 83 EC 0C 53 56 8B 75 08 57 8D 4E 44 8D 55 F4 FF
+*/
+    return TRUE;
+}
+
+// BOOLEAN
+// KeAlertThread_k8 (
+    // PKTHREAD Thread,
+    // KPROCESSOR_MODE AlertMode
+    // )
+// {
+
+    // BOOLEAN Alerted;
+    // KLOCK_QUEUE_HANDLE LockHandle;
+
+    // //
+    // // Raise IRQL to SYNCH_LEVEL, acquire the thread APC queue lock, and lock
+    // // the dispatcher database.
+    // //
+
+    // KeAcquireInStackQueuedSpinLockRaiseToSynch(&Thread->ApcQueueLock, &LockHandle);
+    // KiLockDispatcherDatabaseAtSynchLevel();
+
+    // //
+    // // Capture the current state of the alerted variable for the specified
+    // // processor mode.
+    // //
+
+    // Alerted = Thread->Alerted[AlertMode];
+
+    // //
+    // // If the alerted state for the specified processor mode is Not-Alerted,
+    // // then attempt to alert the thread.
+    // //
+
+    // if (Alerted == FALSE) {
+
+        // //
+        // // If the thread is currently in a Wait state, the Wait is alertable,
+        // // and the specified processor mode is less than or equal to the Wait
+        // // mode, then the thread is unwaited with a status of "alerted".
+        // //
+
+        // if ((Thread->State == Waiting) && (Thread->Alertable == TRUE) &&
+            // (AlertMode <= Thread->WaitMode)) {
+            // KiUnwaitThread(Thread, STATUS_ALERTED, ALERT_INCREMENT);
+
+        // } else {
+            // Thread->Alerted[AlertMode] = TRUE;
+        // }
+    // }
+
+    // //
+    // // Unlock the dispatcher database from SYNCH_LEVEL, release the thread
+    // // APC queue lock, exit the scheduler, and return the previous alerted
+    // // state for the specified mode.
+    // //
+
+    // KiUnlockDispatcherDatabaseFromSynchLevel();
+    // KeReleaseInStackQueuedSpinLockFromDpcLevel(&LockHandle);
+    // KiExitDispatcher(LockHandle.OldIrql);
+    // return Alerted;
+// }
+
+
+
+BOOLEAN
+KeTestAlertThread_k8 (
+    KPROCESSOR_MODE AlertMode
+    )
+{
+
+    BOOLEAN Alerted;
+    KLOCK_QUEUE_HANDLE LockHandle;
+    PKTHREAD Thread;
+
+    //
+    // Raise IRQL to SYNCH_LEVEL and acquire the thread APC queue lock.
+    //
+
+    Thread = KeGetCurrentThread();
+    KeAcquireInStackQueuedSpinLockRaiseToSynch(&Thread->ApcQueueLock,
+                                               &LockHandle);
+
+    //
+    // If the current thread is alerted for the specified processor mode,
+    // then clear the alerted state. Else if the specified processor mode
+    // is user and the current thread's user mode APC queue contains an
+    // entry, then set user APC pending.
+    //
+
+    Alerted = Thread->Alerted[AlertMode];
+    if (Alerted == TRUE) {
+        Thread->Alerted[AlertMode] = FALSE;
+
+    } else if ((AlertMode == UserMode) &&
+              (IsListEmpty(&Thread->ApcState.ApcListHead[UserMode]) != TRUE)) {
+
+        Thread->ApcState.UserApcPending = TRUE;
+    }
+
+    //
+    // Release the thread APC queue lock, lower IRQL to its previous value,
+    // and return the previous alerted state for the specified mode.
+    //
+
+    KeReleaseInStackQueuedSpinLock(&LockHandle);
+    return Alerted;
+}
+
+
+VOID
+ObDeleteCapturedInsertInfo_k8 (
+    PVOID Object
+    )
+{
+    POBJECT_HEADER ObjectHeader;
+
+
+    //
+    //  Get the address of the object header and free the object create
+    //  information object if the object is being created.
+    //
+
+    ObjectHeader = OBJECT_TO_OBJECT_HEADER(Object);
+
+    if (ObjectHeader->Flags & OB_FLAG_NEW_OBJECT) {
+
+        if (ObjectHeader->ObjectCreateInfo != NULL) {
+
+            ObpFreeObjectCreateInformation(ObjectHeader->ObjectCreateInfo);
+
+            ObjectHeader->ObjectCreateInfo = NULL;
+        }
+    }
+
+    return;
+}
+
+
+VOID FASTCALL
+ExfReleasePushLockShared_k8 (
+    PEX_PUSH_LOCK PushLock
+     )
+{
+    ExfReleasePushLock(PushLock);
+}
+
+
+VOID FASTCALL
+ExfTryToWakePushLock_k8 (
+    PEX_PUSH_LOCK PushLock
+    )
+{
+    ExfReleasePushLock(PushLock);
+}
+
+NTSTATUS
+LpcRequestWaitReplyPortEx_k8 (
+    PVOID PortAddress,
+    PPORT_MESSAGE RequestMessage,
+    PPORT_MESSAGE ReplyMessage
+    )
+{
+
+
+/*
+TODO: hex inject    
+rtm, sp1
+64 A1 24 01 00 00 0F BE 80 40 01 00 00 50 FF 74 24 10 FF 74 24 10 FF 74 24 10
+
+sp2,sp3
+55 8B EC 64 A1 24 01 00 00 0F BE 80 40 01 00 00 50 FF 75 10 FF 75 0C FF 75 08
+*/
+    return LpcRequestWaitReplyPort( PortAddress,
+                                    RequestMessage,
+                                    ReplyMessage );
+}
+
+
+NTSTATUS
+KeExpandKernelStackAndCallout_k8 (
+    PEXPAND_STACK_CALLOUT Callout,
+    PVOID Parameter,
+    SIZE_T Size
+    )
+{
+    ULONG_PTR   ActualLimit;
+    ULONG_PTR   CurrentLimit;
+    ULONG_PTR   CurrentStack;
+    KIRQL       ExitIrql;
+    volatile BOOLEAN InCallout;
+    PVOID       LargeStack;
+    KIRQL       OldIrql;
+    NTSTATUS    Status;
+    PKTHREAD    Thread;
+    
+    if (Size > MAXIMUM_EXPANSION_SIZE) {
+        return STATUS_INVALID_PARAMETER_3;
+    }
+    
+    Thread = KeGetCurrentThread();
+    CurrentStack = KeGetCurrentStackPointer();
+    CurrentLimit = (ULONG_PTR)Thread->StackLimit;
+    //ActualLimit = CurrentLimit;
+    
+    if ((CurrentStack - CurrentLimit) < Size) {
+        Status = MmGrowKernelStack((PVOID)CurrentStack);
+        if (NT_SUCCESS(Status) == FALSE) {
+            return STATUS_NO_MEMORY;
+        }
+    }
+
+    Status = STATUS_SUCCESS;
+    InCallout = TRUE;
+    __try {
+        __try {
+            (Callout)(Parameter);
+            InCallout = FALSE;
+
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            KeBugCheck(KMODE_EXCEPTION_NOT_HANDLED);
+        }
+
+    } __finally {
+        if (InCallout == TRUE) {
+            KeBugCheck(KMODE_EXCEPTION_NOT_HANDLED);
+        }
+    }
+    
+    return STATUS_SUCCESS;
+}
+
+
+// TODO trace OldIrql depend on caller
+void
+KeEnterGuardedRegion_k8 (void)
+{
+    KeEnterCriticalRegion();
+    
+    if (g_GuardedRegionCounter < 1 &&
+        KeGetCurrentIrql() < g_GuardedRegion_OldIrql &&
+        KeGetCurrentIrql() < APC_LEVEL)
+            KeRaiseIrql(APC_LEVEL, &g_GuardedRegion_OldIrql);
+    
+    InterlockedIncrement(&g_GuardedRegionCounter);
+}
+
+
+void
+KeLeaveGuardedRegion_k8 (void)
+{
+    InterlockedDecrement(&g_GuardedRegionCounter);
+    
+    if (g_GuardedRegionCounter < 1)
+        KeLowerIrql(g_GuardedRegion_OldIrql);
+
+    if (g_GuardedRegionCounter < 0)
+        InterlockedExchange(&g_GuardedRegionCounter, 0);    
+    
+    KeLeaveCriticalRegion();
+}
+
+
+void FASTCALL
+KeInitializeGuardedMutex_k8 (
+    PKGUARDED_MUTEX Mutex )
+{    
+    /*
+    {
+        volatile LONG Count;
+        PKTHREAD Owner;
+        ULONG Contention;
+        KGATE Gate;
+        union {
+           struct {
+            SHORT KernelApcDisable;
+            SHORT SpecialApcDisable;
+           };
+           ULONG CombinedApcDisable;
+        };
+    } KGUARDED_MUTEX
+    
+    {
+        volatile LONG Count;
+        PKTHREAD Owner;
+        ULONG Contention;
+        KEVENT Event;
+        ULONG OldIrql;
+    } FAST_MUTEX, */
+
+    ExInitializeFastMutex((PFAST_MUTEX)Mutex);
+
+}
+
+
+void FASTCALL
+KeAcquireGuardedMutex_k8 (
+  PKGUARDED_MUTEX  Mutex )
+{
+    KeEnterGuardedRegion_k8();
+    ExAcquireFastMutex((PFAST_MUTEX)Mutex);
+}
+
+
+BOOLEAN FASTCALL
+KeTryToAcquireGuardedMutex_k8 (
+    PKGUARDED_MUTEX Mutex )
+{
+    BOOLEAN    status;
+    
+    KeEnterGuardedRegion_k8();
+    status = ExTryToAcquireFastMutex((PFAST_MUTEX)Mutex);
+    
+    if (status == FALSE)
+        KeLeaveGuardedRegion_k8();
+
+    return status;
+}
+
+
+void FASTCALL
+KeReleaseGuardedMutex_k8 (
+    PKGUARDED_MUTEX Mutex )
+{
+    ExReleaseFastMutex((PFAST_MUTEX)Mutex);
+    KeLeaveGuardedRegion_k8();
+}
+
+
+void FASTCALL
+KeAcquireGuardedMutexUnsafe_k8 (
+    PKGUARDED_MUTEX FastMutex )
+{
+    ExAcquireFastMutexUnsafe((PFAST_MUTEX)FastMutex);
+}
+
+
+void FASTCALL
+KeReleaseGuardedMutexUnsafe_k8 (
+    PKGUARDED_MUTEX FastMutex )
+{
+    ExReleaseFastMutexUnsafe((PFAST_MUTEX)FastMutex);
+}
+
+
+
+PVOID
+GetRoutineAddress_k8 (
+    PUNICODE_STRING SystemRoutineName,
+    const PCHAR Modulename)
+{
+    NTSTATUS                Status;
+    ANSI_STRING             AnsiString;
+    PVOID                   FunctionAddress;
+    LOGICAL                 Found;
+    ULONG                   ReturnLength;
+    PRTL_PROCESS_MODULES    ModuleInformation;
+    PRTL_PROCESS_MODULE_INFORMATION ModuleInfo;
+    CHAR                   *FileName;
+    ULONG_PTR               OldUserProbeAddress;
+    ULONG_PTR              *pUserProbeAddress;
+
+    do {
+        Status = RtlUnicodeStringToAnsiString(&AnsiString,
+                                              SystemRoutineName,
+                                              TRUE);
+        if (NT_SUCCESS(Status))
+        {
+            break;
+        }
+
+        KeDelayExecutionThread(KernelMode, FALSE, (PLARGE_INTEGER)&MmShortTime);
+
+    } while (TRUE);
+
+    if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+        ModuleInformation = (PRTL_PROCESS_MODULES) ExAllocatePoolWithTag(NonPagedPool, NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
+    else    
+        ModuleInformation = (PRTL_PROCESS_MODULES) ExAllocatePoolWithTag(PagedPool,    NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
+
+    RtlZeroMemory(ModuleInformation, NtQuery_BUFFERSIZE * sizeof(UCHAR));
+
+    pUserProbeAddress = &MmUserProbeAddress;
+    OldUserProbeAddress = *pUserProbeAddress;
+    *pUserProbeAddress  = (ULONG_PTR)-1; // hack to allow NtQuerySystemInformation write
+                                         // to Buffer allocated in kernel space > 0x7FFF0000
+    Status = NtQuerySystemInformation(  SystemModuleInformation,
+                                        ModuleInformation,
+                                        NtQuery_BUFFERSIZE * sizeof(UCHAR),
+                                        &ReturnLength );
+    *pUserProbeAddress  = OldUserProbeAddress;
+
+    if (Status != STATUS_SUCCESS) {
+        RtlFreeAnsiString (&AnsiString);
+        ExFreePoolWithTag(ModuleInformation, 'pmuD');
+        return NULL;
+    }
+
+    Found = FALSE;
+    for (ULONG Index = 0; Index < ModuleInformation->NumberOfModules; Index++)
+    {
+        ModuleInfo = &ModuleInformation->Modules[Index];
+        FileName = (CHAR *)ModuleInfo->FullPathName + ModuleInfo->OffsetToFileName;
+
+            if (strcmp(FileName, Modulename) == 0)
+            {
+                Found = TRUE;
+                break;
+            }
+    }
+    
+    if (Found == TRUE)
+        FunctionAddress = MiFindExportedRoutineByName_k8( ModuleInfo->ImageBase,
+                                                       &AnsiString );
+    else
+        FunctionAddress = NULL;
+        
+    RtlFreeAnsiString (&AnsiString);
+    ExFreePoolWithTag(ModuleInformation, 'pmuD');
+    return FunctionAddress;
+}
+
+
+PVOID
+GetModuleBaseAddress_k8 (
+    const PCHAR Modulename)
+{
+    NTSTATUS                Status;
+    PVOID                   FunctionAddress;
+    LOGICAL                 Found;
+    ULONG                   ReturnLength;
+    PRTL_PROCESS_MODULES    ModuleInformation;
+    PRTL_PROCESS_MODULE_INFORMATION ModuleInfo;
+    CHAR                   *FileName;
+    ULONG_PTR               OldUserProbeAddress;
+    ULONG_PTR              *pUserProbeAddress;
+
+    if (KeGetCurrentIrql() >= DISPATCH_LEVEL)
+        ModuleInformation = (PRTL_PROCESS_MODULES) ExAllocatePoolWithTag(NonPagedPool, NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
+    else    
+        ModuleInformation = (PRTL_PROCESS_MODULES) ExAllocatePoolWithTag(PagedPool,    NtQuery_BUFFERSIZE * sizeof(UCHAR), 'pmuD');
+
+    RtlZeroMemory(ModuleInformation, NtQuery_BUFFERSIZE * sizeof(UCHAR));
+
+    pUserProbeAddress = &MmUserProbeAddress;
+    OldUserProbeAddress = *pUserProbeAddress;
+    *pUserProbeAddress  = (ULONG_PTR)-1; // hack to allow NtQuerySystemInformation write
+                                         // to Buffer allocated in kernel space > 0x7FFF0000
+    Status = NtQuerySystemInformation(  SystemModuleInformation,
+                                        ModuleInformation,
+                                        NtQuery_BUFFERSIZE * sizeof(UCHAR),
+                                        &ReturnLength );
+    *pUserProbeAddress  = OldUserProbeAddress;
+
+    if (Status != STATUS_SUCCESS) {
+        ExFreePoolWithTag(ModuleInformation, 'pmuD');
+        return NULL;
+    }
+
+    Found = FALSE;
+    for (ULONG Index = 0; Index < ModuleInformation->NumberOfModules; Index++)
+    {
+        ModuleInfo = &ModuleInformation->Modules[Index];
+        FileName = (CHAR *)ModuleInfo->FullPathName + ModuleInfo->OffsetToFileName;
+
+            if (strcmp(FileName, Modulename) == 0)
+            {
+                Found = TRUE;
+                break;
+            }
+    }
+    
+    if (Found == TRUE)
+        FunctionAddress = ModuleInfo->ImageBase;
+    else
+        FunctionAddress = NULL;
+
+    ExFreePoolWithTag(ModuleInformation, 'pmuD');
+    return FunctionAddress;
+}
+
+
+#if defined(_X86_)
+    #define KeYieldProcessor()    __asm { pause }
+#else
+    #define KeYieldProcessor()  //TODO check x64 pause()
+#endif
+
+
+void FASTCALL
+KiAcquireQueuedLock_k8 (
+    IN PKSPIN_LOCK_QUEUE QueuedLock
+    )
+{
+    PKSPIN_LOCK_QUEUE Previous;
+    PKSPIN_LOCK Lock;
+    volatile ULONG_PTR * LockPointer;
+
+    LockPointer = (volatile ULONG_PTR *)&QueuedLock->Lock;
+
+    Previous = (PKSPIN_LOCK_QUEUE) InterlockedExchangePointer((volatile PVOID *)QueuedLock->Lock, QueuedLock);
+
+    if (Previous == NULL) {
+
+        //
+        // This processor now owns this lock.
+        //
+
+#if defined(QLOCK_STAT_CLEAN)
+
+        ULONG LockNumber;
+
+        LockNumber = QueuedLock - KeGetCurrentPrcb()->LockQueue;
+
+        //
+        // The following check allows the conversion from QueuedLock to
+        // lock number to work (validly) even if in stack queued spin
+        // locks are using this routine.
+        //
+
+        if (LockNumber < QLOCKS_NUMBER) {
+            KiQueuedSpinLockHouse[LockNumber].Clean = 1;
+        }
+        
+#endif
+
+        *LockPointer |= LOCK_QUEUE_OWNER;
+
+    } else {
+
+        //
+        // Lock is already held, update thew next pointer in the
+        // previous queue entry to point to this new waiter and 
+        // wait until the lock is granted.
+        //
+
+        *LockPointer |= LOCK_QUEUE_WAIT;
+        Previous->Next = QueuedLock;
+
+        while (*LockPointer & LOCK_QUEUE_WAIT) {
+            KeYieldProcessor();
+        }
+    }
+
+    //
+    // Lock has been acquired.
+    //
+}
+
+
+void FASTCALL
+KiReleaseQueuedLock_k8 (
+    IN PKSPIN_LOCK_QUEUE QueuedLock
+    )
+{
+    PKSPIN_LOCK_QUEUE Waiter;
+
+    //
+    // Get the address of the actual lock and strip out the bottom
+    // two bits which are used for status.
+    //
+
+    ASSERT((((ULONG_PTR)QueuedLock->Lock) & 3) == LOCK_QUEUE_OWNER);
+    QueuedLock->Lock = (PKSPIN_LOCK)((ULONG_PTR)QueuedLock->Lock & ~3);
+
+    Waiter = (PKSPIN_LOCK_QUEUE)*QueuedLock->Lock;
+
+    if (Waiter == QueuedLock) {
+
+        //
+        // Good chance noone is queued on this lock, to be sure
+        // we need to do an interlocked operation on it.
+        // Note: This is just an optimization, there is no point
+        // in doing the interlocked compare exchange if someone
+        // else has already joined the queue.
+        //
+
+        Waiter = (PKSPIN_LOCK_QUEUE) InterlockedCompareExchangePointer((volatile PVOID *) QueuedLock->Lock,
+                                                   NULL,
+                                                   QueuedLock);
+    }
+    if (Waiter != QueuedLock) {
+
+        //
+        // There is another waiter.  It is possible for the waiter
+        // to have only just performed the exchange that put its 
+        // context in the lock and to have not yet updated the
+        // 'next' pointer in the previous context (which could be 
+        // this context), so we wait for our next pointer to be
+        // non-null before continuing.
+        //
+
+        volatile PKSPIN_LOCK_QUEUE * NextQueuedLock = &QueuedLock->Next;
+
+        while ((Waiter = *NextQueuedLock) == NULL) {
+            KeYieldProcessor();
+        }
+
+        //
+        // Pass the lock on to the next in line.
+        //
+
+        *((PULONG_PTR)&Waiter->Lock) ^= (LOCK_QUEUE_WAIT | LOCK_QUEUE_OWNER);
+        QueuedLock->Next = NULL;
+    }
+}
+
+
+
+void FASTCALL
+KeAcquireQueuedSpinLockAtDpcLevel_k8 (
+    IN PKSPIN_LOCK_QUEUE QueuedLock
+    )
+{
+    KiAcquireQueuedLock_k8(QueuedLock);
+}
+
+
+void FASTCALL
+KeReleaseQueuedSpinLockFromDpcLevel_k8 (
+    IN PKSPIN_LOCK_QUEUE QueuedLock
+    )
+{
+    KiReleaseQueuedLock_k8(QueuedLock);
+}
+
+#ifdef __cplusplus
+}
+#endif

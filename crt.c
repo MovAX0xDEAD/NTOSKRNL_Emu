@@ -3,6 +3,11 @@
 // #include <ntddk.h> 
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 // //////////////////////////////////////////////////
 // //                   Wine/CRT
 
@@ -266,3 +271,6 @@
 //     return res;
 //  }    
  
+#ifdef __cplusplus
+}
+#endif
