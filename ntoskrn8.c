@@ -51,7 +51,6 @@ typedef enum _MEMORY_INFORMATION_CLASS {
     MemoryBasicVlmInformation
 } MEMORY_INFORMATION_CLASS; 
 
-typedef int (*PFNRT)();
 
 #define ADDENTRY_FULLPROLOG(Array,Field,g_Spin,MAX,LastUsed_Entry)  \
 for (ULONG iii = 0; iii < MAX; iii++) {                                   \
@@ -154,6 +153,7 @@ static ULONG           gLastEntry_LookasideListEx;
 static KSPIN_LOCK      gSpin_CreateProcessNotifyEx;
 static KSPIN_LOCK      gSpin_LookasideListEx;
 
+typedef int (*PFNRT)();
 
 /** KiServiceLinkage  (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64). */
 extern PFNRT                               g_pfnKiServiceLinkage;
@@ -170,8 +170,8 @@ Initialize (PUNICODE_STRING  RegistryPath)
 {
     KLOCK_QUEUE_HANDLE  LockHandle;
 
-    g_GuardedRegionCounter  = 0;
-    g_GuardedRegion_OldIrql = APC_LEVEL; // initial MAX irql
+    gGuardedRegionCounter  = 0;
+    gGuardedRegion_OldIrql = APC_LEVEL; // initial MAX irql
 
     KeInitializeSpinLock(&gSpin_CreateProcessNotifyEx);
     KeInitializeSpinLock(&gSpin_LookasideListEx);
@@ -2595,15 +2595,16 @@ NTSTATUS
 DllInitialize (                // Main entry
     PUNICODE_STRING  RegistryPath )
 {
-     /*     // debug loop
+    /*     // debug loop
     __asm {
         L1:
         jmp L1
     }
-     */
-    
+    */
+
     Initialize(RegistryPath);
     PsSetCreateProcessNotifyRoutine((PCREATE_PROCESS_NOTIFY_ROUTINE)&CREATE_PROCESS_NOTIFY_ROUTINE_asm, FALSE);
+    WRK2003_Init();
 
 #ifdef DEBUG_TESTS
     RunTests();

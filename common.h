@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+
 #define CONTAINING_RECORD(address, type, field) ((type *)( \
                                                   (PCHAR)(address) - \
                                                   (ULONG_PTR)(&((type *)0)->field)))
@@ -219,7 +220,6 @@ typedef struct _IO_WORKITEM_EX {
     PVOID                      Context;
     ULONG                      Type;
 } IO_WORKITEM_EX;
-
 
 
 #if (NTDDI_VERSION < NTDDI_VISTA)            // Windows XP/2003

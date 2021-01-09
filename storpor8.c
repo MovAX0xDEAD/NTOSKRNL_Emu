@@ -790,7 +790,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
     gDumpMode = isDumpMode(RegistryPath);
 
     if (gDumpMode) {
-        BaseAdress = GetModuleBaseAddress_k8("dump_diskdump.sys");
+        BaseAdress = GetModuleBaseAddress_k8("dump_diskdump.sys", NULL, 0, 0);
         if (BaseAdress == NULL) {
             gDumpMode = FALSE;      // error,  dump_diskdump.sys not found
             return;
@@ -1766,7 +1766,7 @@ DllInitialize (                // Main entry
         L1:
         jmp L1
     }
-     */
+    */
     
     StorportInit((PDEVICE_OBJECT) -1, RegistryPath);
 

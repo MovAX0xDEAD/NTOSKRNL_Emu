@@ -10,9 +10,8 @@
 extern "C" {
 #endif
 
+
 uintptr_t __security_cookie = 0xDEADBEEF;
-
-
 
 
 #if defined(_X86_)
@@ -135,6 +134,7 @@ RtlGetThreadLangIdByIndex_k8 (
   
     return STATUS_SUCCESS;
 }
+
 
 #ifdef __cplusplus
 }

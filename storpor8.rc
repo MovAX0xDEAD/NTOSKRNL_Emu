@@ -1,8 +1,8 @@
 #include <verrsrc.h>
 #include <ntverp.h>
 
-#define VER_FILEVERSION              5,1,2600,6
-#define VER_FILEVERSION_STR         "5.1.2600.6"
+#define VER_FILEVERSION              5,1,2600,7
+#define VER_FILEVERSION_STR         "5.1.2600.7"
 
 
 #define VER_FILETYPE                VFT_DRV
@@ -21,7 +21,7 @@
 #define VER_PRODUCTVERSION_STR      VER_FILEVERSION_STR
 
 #undef VER_COMPANYNAME_STR
-#define VER_COMPANYNAME_STR         VER_FILEDESCRIPTION_STR
+#define VER_COMPANYNAME_STR         VER_LEGALCOPYRIGHT_STR
 
 #undef VER_PRODUCTNAME_STR
 #define VER_PRODUCTNAME_STR         VER_FILEDESCRIPTION_STR

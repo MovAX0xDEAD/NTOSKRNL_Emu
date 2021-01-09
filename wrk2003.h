@@ -5,8 +5,8 @@ extern "C" {
 #endif
 
 extern const LARGE_INTEGER  MmShortTime;
-extern       KIRQL          g_GuardedRegion_OldIrql;
-extern       LONG           g_GuardedRegionCounter;
+extern       KIRQL          gGuardedRegion_OldIrql;
+extern       LONG           gGuardedRegionCounter;
 
 typedef USHORT RTL_ATOM, *PRTL_ATOM;
 #define RTL_ATOM_MAXIMUM_INTEGER_ATOM   (RTL_ATOM)0xC000
@@ -26,6 +26,35 @@ typedef USHORT RTL_ATOM, *PRTL_ATOM;
 
 #define KeMemoryBarrierWithoutFence() _ReadWriteBarrier()
 
+#define _PsGetCurrentThread() ((PETHREAD)KeGetCurrentThread())
+
+#define KiLockContextSwap(OldIrql) \
+    *(OldIrql) = KeAcquireQueuedSpinLockRaiseToSynch(LockQueueExpansionLock) // LockQueueExpansionLock=LockQueueContextSwapLock
+
+#define KiUnlockContextSwap(OldIrql) \
+    KeReleaseQueuedSpinLock(LockQueueExpansionLock, OldIrql)  // LockQueueExpansionLock=LockQueueContextSwapLock
+
+#define KeActiveProcessors KeQueryActiveProcessors()
+
+#define KeYieldProcessor YieldProcessor
+
+#define KiIpiSendSynchronousPacket(Prcb,Target,Function,P1,P2,P3)       \
+    {                                                                   \
+        extern PKPRCB KiSynchPacket;                                    \
+                                                                        \
+        Prcb->CurrentPacket[0] = (PVOID)(P1);                           \
+        Prcb->CurrentPacket[1] = (PVOID)(P2);                           \
+        Prcb->CurrentPacket[2] = (PVOID)(P3);                           \
+        Prcb->TargetSet = (Target);                                     \
+        Prcb->WorkerRoutine = (Function);                               \
+        if (((Target) & ((Target) - 1)) == 0) {                         \
+           KiSynchPacket = (PKPRCB)((ULONG_PTR)(Prcb) | 1);             \
+        } else {                                                        \
+           KiSynchPacket = (Prcb);                                      \
+           Prcb->PacketBarrier = 1;                                     \
+        }                                                               \
+        KiIpiSend((Target),IPI_SYNCH_REQUEST);                          \
+    }
 
 #define OB_FLAG_NEW_OBJECT              0x01
 #define OB_FLAG_KERNEL_OBJECT           0x02
@@ -66,6 +95,8 @@ typedef enum _KTHREAD_STATE {
 #endif
 
 
+// hal import
+
 VOID FASTCALL
 KeAcquireQueuedSpinLockAtDpcLevel (
      PKSPIN_LOCK_QUEUE QueuedLock
@@ -76,6 +107,13 @@ VOID FASTCALL
 KeReleaseQueuedSpinLockFromDpcLevel (
     PKSPIN_LOCK_QUEUE QueuedLock
     );
+
+
+KIRQL FASTCALL
+KeAcquireQueuedSpinLockRaiseToSynch (
+    IN KSPIN_LOCK_QUEUE_NUMBER Number
+    );
+
 
 
 #if defined(_AMD64_)
@@ -588,7 +626,17 @@ GetRoutineAddress_k8 (
 
 PVOID
 GetModuleBaseAddress_k8 (
-    const PCHAR Modulename);
+    const PCHAR Modulename,
+    int*  ModuleSize,
+    int   ByOrderMode,
+    int   OrderNum);
+
+
+#define MODULE_NTOSKRNL 0
+#define MODULE_HAL      1
+
+void
+WRK2003_Init(void);
 
 
 #ifdef __cplusplus
