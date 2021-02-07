@@ -1,9 +1,10 @@
 #########################################################################
 
 USE_NOLIBS=1
-BUFFER_OVERFLOW_CHECKS=0
+BUFFER_OVERFLOW_CHECKS=LINK_ONLY
 NT_UP=0
 USECXX_FLAG=1
+NOMASMCOMPATIBILITY=1
 #_X86PAE_
 #NTDDI_VERSION=0x06000200
 
@@ -26,11 +27,16 @@ TARGETPATH=obj$(BUILD_ALT_DIR)
 
 TARGETLIBS=$(TARGETLIBS) $(DDK_LIB_PATH)\ntstrsafe.lib \
 
+
                 
 !if $(386)
 SAFECRTPATH=..\i386\safecrtnt
+TARGETLIBS=$(TARGETLIBS) ..\i386\missed_MmGrowKernelStack.lib
+
 !elseif $(AMD64)
 SAFECRTPATH=..\amd64\safecrtnt
+TARGETLIBS=$(TARGETLIBS) ..\amd64\missed_MmGrowKernelStack.lib
+
 !endif
 
 TARGETLIBS=$(TARGETLIBS) $(SAFECRTPATH)\_wcscat_s.obj \

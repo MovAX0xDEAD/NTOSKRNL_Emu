@@ -11,20 +11,6 @@ extern "C" {
 #endif
 
 
-uintptr_t __security_cookie = 0xDEADBEEF;
-
-
-#if defined(_X86_)
-void __fastcall
-#else
-void __cdecl
-#endif
-__security_check_cookie (uintptr_t _StackCookie)
-{
-    ;
-}
-
-
 BOOLEAN
 KeSetCoalescableTimer_k8 (
     KTIMER         *Timer,
@@ -40,22 +26,6 @@ KeSetCoalescableTimer_k8 (
             Dpc );     
 }
 
-
-
-/*
-int __cdecl
-stricmp_k8 (const char *s1, const char *s2)
-{
-  while (toupper(*s1) == toupper(*s2))
-  {
-    if (*s1 == 0)
-      return 0;
-    s1++;
-    s2++;
-  }
-  return toupper(*(unsigned const char *)s1) - toupper(*(unsigned const char *)(s2));
-}
-*/
 
 BOOLEAN
 RtlGetIntegerAtom_k8 (

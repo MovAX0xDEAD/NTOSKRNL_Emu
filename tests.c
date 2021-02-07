@@ -1,4 +1,3 @@
-/*
 ///////////////////////////////////////////
 //  debug KeQueryLogicalProcessorRelationship
 
@@ -60,7 +59,7 @@ TraceGUMessage(
 #define GU_PRINT(_level_,_flag_, _format_, ...)                               \
         TraceGUMessage(__FUNCTION__, __FILE__, __LINE__, _level_, _format_, __VA_ARGS__);  \
 
-#if (NTDDI_VERSION <= NTDDI_VISTASP4)
+#if (NTDDI_VERSION < NTDDI_WIN7)
     #define KeQueryLogicalProcessorRelationship     \
             KeQueryLogicalProcessorRelationship_k8
 #endif
@@ -172,7 +171,7 @@ void PrintNumaCpuConfiguration()
 
 //  debug
 /////////////////////////////////
-*/
+
 
 void Routine1 (
     PEPROCESS Process,
@@ -197,10 +196,53 @@ void Routine3 (
     volatile int a=0x1L;
 }
 
+
+typedef struct _test1 {
+    /*char *arrayOfCatchableTypes1[1];
+    int* arrayOfCatchableTypes2[2];
+    const long *arrayOfCatchableTypes3[1];
+    __int64* const arrayOfCatchableTypes4[1];
+    const __int64* const arrayOfCatchableTypes5[1];*/
+
+
+    //const char          *Ptr1;      // const char*  Ptr
+    //      char* const    Ptr2;      // char* const Ptr
+    //const char* const    Ptr3;      // const char* const Ptr
+    //const char* const   *Ptr4;      // const char* const *Ptr4
+    //volatile const char *Ptr5;
+    //char* volatile const Ptr6;
+    //volatile const char* volatile const   Ptr7;
+    //volatile const char* volatile const  *Ptr8;
+
+    //const char              &Ptr10;
+    //char&                   Ptr20;
+    //const char&             Ptr30;
+    //volatile const char     &Ptr50;
+    //volatile const char&     Ptr70;
+
+    //const char           &Ptr11;
+    //char* const          &Ptr21;
+    //const char* const    &Ptr31;
+    //char                *&Ptr40;
+    //char*                &Ptr41;
+    //char               **&Ptr42;
+    //volatile const char  &Ptr51;
+    //char* volatile const &Ptr61;
+    //volatile const char* volatile const   &Ptr71;
+
+    _ULARGE_INTEGER ff;
+
+} test1_t;
+
+
 void
 RunTests (void)
 {
-    PsSetCreateProcessNotifyRoutineEx_k8 (Routine1, FALSE);
+    //test1_t* test1;
+    //test1->Ptr1 = NULL;
+    //*test1.Ptr1 = '1';
+
+    /*PsSetCreateProcessNotifyRoutineEx_k8 (Routine1, FALSE);
     PsSetCreateProcessNotifyRoutineEx_k8 (Routine2, FALSE);
     PsSetCreateProcessNotifyRoutineEx_k8 (Routine3, FALSE);    
     
@@ -212,6 +254,21 @@ RunTests (void)
     
     PsSetCreateProcessNotifyRoutineEx_k8 (Routine2, TRUE);
     PsSetCreateProcessNotifyRoutineEx_k8 (Routine1, TRUE);    
-    PsSetCreateProcessNotifyRoutineEx_k8 (Routine3, TRUE);    
-        
+    PsSetCreateProcessNotifyRoutineEx_k8 (Routine3, TRUE);    */
+
+    /*HANDLE  Handle = NULL;
+    void const * Ptr = NULL;
+    MEMORY_INFORMATION_CLASS Class = MemoryBasicVlmInformation;
+    PVOID Ptr2 = NULL;
+    SIZE_T Size = 1;
+    PSIZE_T Size2 = &Size;
+
+    ZwQueryVirtualMemory_k8(
+        Handle,
+        Ptr,
+        Class,
+        Ptr2,
+        Size,
+        Size2);*/
+
 }

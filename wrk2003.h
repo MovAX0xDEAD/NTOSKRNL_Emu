@@ -8,6 +8,15 @@ extern const LARGE_INTEGER  MmShortTime;
 extern       KIRQL          gGuardedRegion_OldIrql;
 extern       LONG           gGuardedRegionCounter;
 
+
+/*
+Copyright (c) Microsoft Corporation. All rights reserved. 
+
+You may only use this code if you agree to the terms of the Windows Research Kernel Source Code License agreement (see License.txt).
+If you do not agree to the terms, do not use the code.
+*/
+
+
 typedef USHORT RTL_ATOM, *PRTL_ATOM;
 #define RTL_ATOM_MAXIMUM_INTEGER_ATOM   (RTL_ATOM)0xC000
 #define RTL_ATOM_INVALID_ATOM           (RTL_ATOM)0x0000
@@ -28,33 +37,10 @@ typedef USHORT RTL_ATOM, *PRTL_ATOM;
 
 #define _PsGetCurrentThread() ((PETHREAD)KeGetCurrentThread())
 
-#define KiLockContextSwap(OldIrql) \
-    *(OldIrql) = KeAcquireQueuedSpinLockRaiseToSynch(LockQueueExpansionLock) // LockQueueExpansionLock=LockQueueContextSwapLock
-
-#define KiUnlockContextSwap(OldIrql) \
-    KeReleaseQueuedSpinLock(LockQueueExpansionLock, OldIrql)  // LockQueueExpansionLock=LockQueueContextSwapLock
-
 #define KeActiveProcessors KeQueryActiveProcessors()
 
 #define KeYieldProcessor YieldProcessor
 
-#define KiIpiSendSynchronousPacket(Prcb,Target,Function,P1,P2,P3)       \
-    {                                                                   \
-        extern PKPRCB KiSynchPacket;                                    \
-                                                                        \
-        Prcb->CurrentPacket[0] = (PVOID)(P1);                           \
-        Prcb->CurrentPacket[1] = (PVOID)(P2);                           \
-        Prcb->CurrentPacket[2] = (PVOID)(P3);                           \
-        Prcb->TargetSet = (Target);                                     \
-        Prcb->WorkerRoutine = (Function);                               \
-        if (((Target) & ((Target) - 1)) == 0) {                         \
-           KiSynchPacket = (PKPRCB)((ULONG_PTR)(Prcb) | 1);             \
-        } else {                                                        \
-           KiSynchPacket = (Prcb);                                      \
-           Prcb->PacketBarrier = 1;                                     \
-        }                                                               \
-        KiIpiSend((Target),IPI_SYNCH_REQUEST);                          \
-    }
 
 #define OB_FLAG_NEW_OBJECT              0x01
 #define OB_FLAG_KERNEL_OBJECT           0x02
@@ -64,6 +50,11 @@ typedef USHORT RTL_ATOM, *PRTL_ATOM;
 #define OB_FLAG_DEFAULT_SECURITY_QUOTA  0x20
 #define OB_FLAG_SINGLE_HANDLE_ENTRY     0x40
 #define OB_FLAG_DELETED_INLINE          0x80
+
+#define EX_PUSH_LOCK_WAITING   0x1
+#define EX_PUSH_LOCK_EXCLUSIVE 0x2
+#define EX_PUSH_LOCK_SHARE_INC 0x4
+
 
 typedef enum _KTHREAD_STATE {
     Initialized,
@@ -107,35 +98,6 @@ VOID FASTCALL
 KeReleaseQueuedSpinLockFromDpcLevel (
     PKSPIN_LOCK_QUEUE QueuedLock
     );
-
-
-KIRQL FASTCALL
-KeAcquireQueuedSpinLockRaiseToSynch (
-    IN KSPIN_LOCK_QUEUE_NUMBER Number
-    );
-
-
-
-#if defined(_AMD64_)
-    #define KiLockDispatcherDatabaseAtSynchLevel()                               \
-        KiAcquireDispatcherLockAtSynchLevel()
-
-    #define KiUnlockDispatcherDatabaseFromSynchLevel()                           \
-        KiReleaseDispatcherLockFromSynchLevel()
-
-#else // _X86_
-    #define KiLockDispatcherDatabaseAtSynchLevel()                               \
-        KeAcquireQueuedSpinLockAtDpcLevel(&KeGetCurrentPrcb()->LockQueue[LockQueueDispatcherLock])
-
-    #define KiUnlockDispatcherDatabaseFromSynchLevel()                           \
-        KeReleaseQueuedSpinLockFromDpcLevel(&KeGetCurrentPrcb()->LockQueue[LockQueueDispatcherLock])
-#endif
-
-
-#if (NTDDI_VERSION <= NTDDI_WINXPSP4) && defined(_X86_)
-     // KiExitDispatcher is dummy on WinXP x32
-    #define KiExitDispatcher(x) ()
-#endif    
 
 
 #define NtQuery_BUFFERSIZE (100 * 1024) // 100KB/sizeof(RTL_PROCESS_MODULE_INFORMATION) 100*1024/284 = 360 max records
@@ -275,6 +237,12 @@ typedef struct _EX_RUNDOWN_WAIT_BLOCK {
 } EX_RUNDOWN_WAIT_BLOCK, *PEX_RUNDOWN_WAIT_BLOCK;
 
 
+typedef enum _MEMORY_INFORMATION_CLASS {
+    MemoryBasicInformation,
+    MemoryWorkingSetList,
+    MemorySectionName,
+    MemoryBasicVlmInformation
+} MEMORY_INFORMATION_CLASS; 
 
 
 
@@ -354,15 +322,7 @@ ExFreeToPPLookasideList (
     return;
 }
 
-#if defined(_X86_)
 
-#define PcTeb 0x18
-    
-FORCEINLINE struct _TEB *
-NtCurrentTeb (void) {
-    return (struct _TEB *) (ULONG_PTR) __readfsdword (PcTeb);
-}
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////
@@ -630,6 +590,16 @@ GetModuleBaseAddress_k8 (
     int*  ModuleSize,
     int   ByOrderMode,
     int   OrderNum);
+
+
+NTSTATUS
+ZwQueryVirtualMemory_k8 (
+    HANDLE  Handle,
+    void const * Ptr,
+    MEMORY_INFORMATION_CLASS Class,
+    PVOID Ptr2,
+    SIZE_T Size,
+    PSIZE_T Size2);
 
 
 #define MODULE_NTOSKRNL 0

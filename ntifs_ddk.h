@@ -36,6 +36,7 @@
 #include <bugcodes.h>
 #include <ntiologc.h>
 
+#include "common.h"
 
 //
 //  These macros are used to test, set and clear flags respectivly

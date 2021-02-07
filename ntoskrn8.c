@@ -1,10 +1,6 @@
 #undef    __STDC_WANT_SECURE_LIB__
 #define   __STDC_WANT_SECURE_LIB__ 0
 
-//#if defined(_M_AMD64)
-//#undef _M_IX86
-//#endif
-
 #include <ntddk.h> 
 #include "ntifs_ddk.h"
 #include <Initguid.h>
@@ -14,16 +10,9 @@
 #include "wrk2003.h"
 
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef void                (*pVOID__VOID)            (void);
-typedef void                (*pVOID__ULONG)           (ULONG);
-typedef void                (*pVOID__ULONG_ULONG)     (ULONG,ULONG);
-typedef void    (__stdcall  *pfVOID__ULONG_ULONG)     (ULONG,ULONG);
-typedef BOOLEAN (__stdcall  *pfBOOLEAN__ULONG_ULONG)  (ULONG,ULONG);
 
 
 typedef struct _ArrayType_CreateProcessNotifyEx {
@@ -42,14 +31,6 @@ typedef struct _RoutineAddress {
     UNICODE_STRING  RoutineName;
     PVOID           CallAddress;
 } RoutineAddressType;
-
-
-typedef enum _MEMORY_INFORMATION_CLASS {
-    MemoryBasicInformation,
-    MemoryWorkingSetList,
-    MemorySectionName,
-    MemoryBasicVlmInformation
-} MEMORY_INFORMATION_CLASS; 
 
 
 #define ADDENTRY_FULLPROLOG(Array,Field,g_Spin,MAX,LastUsed_Entry)  \
@@ -139,8 +120,6 @@ XhciCompatibleIdList[] = {
 //////////////////////////////////////////////////////////
 // static writable variables
 
-static pVOID__VOID          g_pKeRevertToUserAffinityThread = NULL;
-
 #define MAX_CreateProcessNotifyEx   256
 static ArrayType_CreateProcessNotifyEx Array_CreateProcessNotifyEx [MAX_CreateProcessNotifyEx];
 
@@ -153,13 +132,6 @@ static ULONG           gLastEntry_LookasideListEx;
 static KSPIN_LOCK      gSpin_CreateProcessNotifyEx;
 static KSPIN_LOCK      gSpin_LookasideListEx;
 
-typedef int (*PFNRT)();
-
-/** KiServiceLinkage  (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64). */
-extern PFNRT                               g_pfnKiServiceLinkage;
-
-/** KiServiceInternal (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64) */
-extern PFNRT                               g_pfnKiServiceInternal;
 
 // static writable
 //////////////////////////////////////////////////////////
@@ -1517,6 +1489,8 @@ IoFreeSfioStreamIdentifier_k8 (
 }
 
 
+#if (NTDDI_VERSION < NTDDI_VISTA)
+
 #if defined(_X86_)
 void __stdcall     // _stdcall - CREATE_PROCESS_NOTIFY_ROUTINE_asm accept this calling convection
 #else
@@ -1629,6 +1603,24 @@ PsSetCreateProcessNotifyRoutineEx_k8 (
     return status; 
 }
 
+#else
+#if defined(_X86_)
+void __stdcall     // _stdcall - CREATE_PROCESS_NOTIFY_ROUTINE_asm accept this calling convection
+#else
+void
+#endif
+Create_Process_Notify_Routine_XP (
+    HANDLE      ParentId,
+    HANDLE      ProcessId,
+    BOOLEAN     Create,
+    PEPROCESS   ProcessExit,      // EDI
+    PEPROCESS   ProcessCreate,    // EBX
+    PETHREAD    Thread )          // ESI
+{
+    // dummy for Vista+
+}
+
+#endif          // (NTDDI_VERSION < NTDDI_VISTA)
 
 BOOLEAN
 RtlIsNtDdiVersionAvailable_k8 (
@@ -1688,7 +1680,7 @@ struct LicenseValueType {
 };
 
 
-#define ULONG_MAX 0xffffffffUL
+#define ULONG_MAX   0xffffffffUL
 #define TYPE_DWORD  4
 #define TYPE_SZ     1
 #define LEN_0       0
@@ -1836,96 +1828,6 @@ KeInvalidateRangeAllCaches_k8 (
         KeInvalidateAllCaches_k8();
     }
     
-}
-
-
-typedef NTSTATUS
-(*PFNNTQUERYVIRTUALMEMORY) (
-    HANDLE,
-    void const *,
-    MEMORY_INFORMATION_CLASS,
-    PVOID,
-    SIZE_T,
-    PSIZE_T);
-
-// x32
-extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0xB2;
-extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0xBA;
-
-// x64
-extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0x1F;
-extern PFNNTQUERYVIRTUALMEMORY NtQueryVirtualMemory_0x20;
-
-
-NTSTATUS
-ZwQueryVirtualMemory_k8 (   // taken from virtualbox
-    HANDLE  Handle,
-    void const * Ptr,
-    MEMORY_INFORMATION_CLASS Class,
-    PVOID Ptr2,
-    SIZE_T Size,
-    PSIZE_T Size2)
-{    
-    PFNNTQUERYVIRTUALMEMORY JumpAddr;
-
-#if defined(_X86_)
-    uint8_t const *pbCode  = (uint8_t const *)(uintptr_t)ZwQueryVolumeInformationFile;
-        
-    if (*pbCode == 0xb8) /* mov eax, dword */
-     switch (*(uint32_t const *)&pbCode[1]) {
-        case 0xb3: JumpAddr= (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0xB2; break; /* XP SP1/2/3 */
-        case 0xbb: JumpAddr= (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0xBA; break; /* W2K3 R2 SP2 */
-     }
-#else // x64
-     uint8_t const *pbCode = (uint8_t const *)(uintptr_t)ZwRequestWaitReplyPort;
-     if (  pbCode[ 0] == 0x48   /* mov rax, rsp */
-        && pbCode[ 1] == 0x8b
-        && pbCode[ 2] == 0xc4
-        && pbCode[ 3] == 0xfa   /* cli */
-        && pbCode[ 4] == 0x48   /* sub rsp, 10h */
-        && pbCode[ 5] == 0x83
-        && pbCode[ 6] == 0xec
-        && pbCode[ 7] == 0x10
-        && pbCode[ 8] == 0x50   /* push rax */
-        && pbCode[ 9] == 0x9c   /* pushfq */
-        && pbCode[10] == 0x6a   /* push 10 */
-        && pbCode[11] == 0x10
-        && pbCode[12] == 0x48   /* lea rax, [nt!KiServiceLinkage] */
-        && pbCode[13] == 0x8d
-        && pbCode[14] == 0x05
-        && pbCode[19] == 0x50   /* push rax */
-        && pbCode[20] == 0xb8   /* mov eax,1fh <- the syscall no. */
-        /*&& pbCode[21] == 0x1f*/
-        && pbCode[22] == 0x00
-        && pbCode[23] == 0x00
-        && pbCode[24] == 0x00
-        && pbCode[25] == 0xe9   /* jmp KiServiceInternal */ )
-     {
-        uint8_t const *pbKiServiceInternal = &pbCode[30] + *(int32_t const *)&pbCode[26];
-        uint8_t const *pbKiServiceLinkage  = &pbCode[19] + *(int32_t const *)&pbCode[15];
-        if (*pbKiServiceLinkage == 0xc3)
-        {
-            g_pfnKiServiceInternal = (PFNRT)pbKiServiceInternal;
-            g_pfnKiServiceLinkage  = (PFNRT)pbKiServiceLinkage;
-            switch (pbCode[21])
-            {
-                case 0x1e: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x1F; break;
-                case 0x1f: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x20; break;
-                //case 0x20: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x21; break;
-                //case 0x21: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x22; break;
-                //case 0x22: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x23; break;
-            }
-        }
-        }
-# endif
-
-    return JumpAddr(
-        Handle,
-        Ptr,
-        Class,
-        Ptr2,
-        Size,
-        Size2);
 }
 
  
@@ -2139,7 +2041,7 @@ PsReleaseProcessExitSynchronization_k8 (PEPROCESS Process)
 //  CHAR FileObjectBody[ sizeof( FILE_OBJECT ) ];
 // } DUMMY_FILE_OBJECT, *PDUMMY_FILE_OBJECT;
 
-
+#if (NTDDI_VERSION < NTDDI_WIN7)
 POBJECT_TYPE
 ObGetObjectType_k8 (PVOID Object) {
     POBJECT_HEADER  ObjectHeader;
@@ -2185,6 +2087,7 @@ ObQueryNameInfo_k8 (PVOID Object) {
     
     return NameInfo;
 }
+#endif // NTDDI_VERSION < NTDDI_WIN7
 
 
 void
@@ -2194,7 +2097,7 @@ PoUserShutdownInitiated_k8 (void)
 }
 
 
-//TODO: chech x64 args 
+//TODO: check x64 args 
 NTSTATUS 
 LdrResFindResource_k8 (
     PVOID                       DllHandle,
@@ -2271,6 +2174,7 @@ DbgkLkmdRegisterCallback_k8 (
 {
     return STATUS_SUCCESS;
 }
+
 
 
 
@@ -2605,6 +2509,8 @@ DllInitialize (                // Main entry
     Initialize(RegistryPath);
     PsSetCreateProcessNotifyRoutine((PCREATE_PROCESS_NOTIFY_ROUTINE)&CREATE_PROCESS_NOTIFY_ROUTINE_asm, FALSE);
     WRK2003_Init();
+    //InitTramplineArray();
+
 
 #ifdef DEBUG_TESTS
     RunTests();
@@ -2621,6 +2527,8 @@ DllUnload (void)
 
     return STATUS_SUCCESS;
 }
+
+
 
 #ifdef __cplusplus
 }

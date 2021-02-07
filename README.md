@@ -6,7 +6,7 @@ Project is intended to help in porting drivers from Windows 7/8/8.1/10 for work 
 **How-To:**
 1) Compile sources to make **ntoskrn8.sys**
 2) Make corrections to target driver XXX.sys so that it loads ntoskrn8.sys instead of the original ntoskrnl.exe
-3) If XXX.sys is driver made for Windows 8, change **security_cookie** to random value, security_cookie is constant 0x**4EE640BB** inside file, change only first match !
+3) If XXX.sys is driver made for Windows 8, change **security_cookie** to random value, security_cookie is constant 0x**4EE640BB**(x32) / 0x**32A2DF2D992B**(x64) inside file, change only first match !
 4) Place ntoskrn8.sys to **X:/Windows/system32/drivers/** folder
 
 
@@ -46,7 +46,7 @@ to:
 
 
 # STORPORT Windows 7 Emu\_Extender #
-This is Library of missing functions for Windows 7 STORPORT.SYS to emulate Windows 8 STORPORT.SYS
+This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.23403 to emulate Windows 8' STORPORT.SYS
 
 **How-To:**
 1) Compile ntoskrnl Emu\_Extender
@@ -57,7 +57,7 @@ This is Library of missing functions for Windows 7 STORPORT.SYS to emulate Windo
 
 # Ported drivers: #
 
-## WDF 1.11 for Windows XP/2003 x32 ##
+## Windows 7's WDF 1.11 for Windows XP/2003 x32 ##
 
 Last version for Windows XP/2003 is 1.9, but possible to backport 1.11 version:
 1) Get files from Windows 7 Updates (KB3125574):
@@ -74,7 +74,7 @@ If need coexist with original WDF1.9 drivers:
 4) Rename WDF01000.SYS->WDF01\_W8.SYS, WdfLdr.sys->WdfLdr8.sys
 5) In WDF01\_W8.SYS replace string "**WdfLdr.sys**" to "**WdfLdr8.sys**" in import section
 6) In WdfLdr8.sys replace unicode string "**\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d000**" to "**\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d_w8**"
-7) In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6**
+7) In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6** (x32)
 8) In target driver XXX.sys replace string "**WdfLdr.sys**" to "**WdfLdr8.sys**" in import section
 9) In .INF of ported driver add creating new service:
 ```
@@ -99,9 +99,10 @@ Storport was released starting from Windows 2003, but possible to backport Windo
 
 2) In storport.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section, now storport.sys will import kernel functions only from Emu_Extender
 
-3) Storport may use MSI interrupts, need to force use only legacy/compatible interrupts:
+3) Storport may use MSI interrupts, need to force use only legacy/non-MSI interrupts:
 
-   replace hex pattern **8B 8E 3C 01 00 00** to **B9 00 00 00 00 90**
+   x32 - replace hex pattern **8B 8E 3C 01 00 00** to **B9 00 00 00 00 90** (mov ecx, [esi+13Ch] -> mov ecx, 0)
+   x64 - replace hex pattern **8B 83 C0 01 00 00** to **B8 00 00 00 00 90** (mov eax, [rbx+1C0h] -> mov eax, 0)
 
 4) Recalc checksum
 
@@ -140,13 +141,13 @@ from Vista Beta/Longhorn 5456.5:
 
 ## Windows 8's STORAHCI driver for Windows XP x32 ##
 
-STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys from Windows 7
+STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys v6.1.7601.23403 from Windows 7
 Storport.sys from Windows 7 more compatible with Windows XP/2003 because it still call required *PoStartNextPowerIrp* when processing power IRPs. Microsoft removed calls to PoStartNextPowerIrp in Windows 8's storport.sys, without this call Windows XP/2003 kernel cannot finish current power IRP and start next IRP => it generate BSOD (0x0000009F).
 Also storport.sys from Windows 7 has compatibility mode to allow old XP/2003 kernels write crashdumps through storport based disk drivers. In storport.sys from Windows 8 compatibility mode was removed, writing crashdumps possible only with new kernels.
 
 
 Take attention:
-Windows 8's STORAHCI + Windows's STORPORT have **significal performance drop and high CPU usage**, there is no fix yet
+Windows 8's STORAHCI + Windows 7's STORPORT may have **significal performance drop and high CPU usage**, there is no fix yet
 
 
 1) Get files from Windows 8 (RTM ISO):
@@ -156,15 +157,18 @@ Windows 8's STORAHCI + Windows's STORPORT have **significal performance drop and
 2) In storahci.sys replace string "**storport.sys**" to "**storpor8.sys**" in import section, now storahci.sys will import storport functions only from storport Emu\_Extender
 
 3) Storahci.sys was compiled with Windows 8 DDK's storport.h and writes values to new fields of
- *\_PORT\_CONFIGURATION\_INFORMATION* struct, these fields not exist in Windows 7's storport.sys. Need to skip these writes to avoid damaging structures in memory:
+ *\_PORT\_CONFIGURATION\_INFORMATION* struct, these fields not exist in Windows 7's storport.sys. Need to skip these writes to avoid damaging other structures in memory:
 
-   Replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90**
+   x32 - Replace hex pattern **83 A6 C8 00 00 00 00** to **90 90 90 90 90 90 90** (and dword ptr [esi+0C8h], 0 -> nop)
+   x32 - Replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90** (or  dword ptr [esi+0CCh], 3 -> nop)
 
-   Replace hex pattern **83 8E CC 00 00 00 03** to **90 90 90 90 90 90 90**
+   x64 - Replace hex pattern **44 89 B7 D8 00 00 00** to **90 90 90 90 90 90 90** (mov [rdi+0D8h], r14d        -> nop)
+   x64 - Replace hex pattern **83 8F DC 00 00 00 03** to **90 90 90 90 90 90 90** (or  dword ptr [rdi+0DCh], 3 -> nop)
 
-If you compile storahci from sources (from Windows 8 DDK Samples), comment two lines:
+If you want compile storahci from sources (from Windows 8 DDK Samples), comment two lines:
 ```
        ConfigInfo->BusResetHoldTime = 0;
+       ...
        ConfigInfo->FeatureSupport |= STOR_ADAPTER_FEATURE_STOP_UNIT_DURING_POWER_DOWN;
 ```
 4) In storahci.sys change **security_cookie** to random value
@@ -185,10 +189,9 @@ If you compile storahci from sources (from Windows 8 DDK Samples), comment two l
 2) In ataport.sys, pciidex.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section, now these *.sys will import kernel functions only from Emu\_Extender
 
 3) Pciidex.sys uses MS Internal/Undocumented **HalDispatchTable** way to call functions from Kernel/HAL,
+    For Windows XP/2003 need to use compatible variant:
 
-    For Windows XP/2003 x32 need to use compatible variant:
-    replace hex pattern **FF 50 3C** to **FF 50 40**
-
+    x32: replace hex pattern **FF 50 3C** to **FF 50 40**
     same in asm code:
 ```
        mov     eax, ds:HalDispatchTable
@@ -196,15 +199,32 @@ If you compile storahci from sources (from Windows 8 DDK Samples), comment two l
        call    dword ptr [eax+3Ch] => call    dword ptr [eax+40h]
 ```
 
+    x64: replace hex pattern
+         1) **FF 50 78** to **EB 2A 90**
+         2) offset +2Ch: **CC CC CC CC CC CC CC CC** to **FF 90 80 00 00 00 EB CF**
+    same in asm code:
+```
+       mov     rax, cs:HalDispatchTable
+       ...
+       call    qword ptr [rax+78h] => jmp patch
+orig:
+       mov     r10d, eax
+
+patch:
+      call    qword ptr [eax+80h]
+      jmp     orig
+```
+
+
 4) Recalc checksum
 
-5) MSHDC.INF from Windows 7 may conflict with original mshdc.inf from Windows XP/2003.
-msahci.sys enumerates IDE/SATA channels as "Internal\_IDE\_Channel" and compatible ID is "\*PNP0600". Original mshdc.inf for "\*PNP0600" will install wrong **"Standard IDE/ESDI Hard Disk Controller"** driver
+5) MSHDC.INF from Windows 7 conflict with original mshdc.inf from Windows XP/2003.
+msahci.sys enumerates IDE/SATA channels as "Internal\_IDE\_Channel" and compatible ID is "\*PNP0600". Original mshdc.inf from Windows XP/2003 for compatible Device ID "\*PNP0600" will install wrong **"Standard IDE/ESDI Hard Disk Controller"** driver
 
 
 
 ## Intel RSTe Enterprise AHCI/RAID driver 4.7.0.1098 for Windows XP/2003 + ##
-## Intel RST AHCI/RAID driver (v 11.x-15.x, last compatible 15.9.8/15.44.0) for Windows XP/2003 ##
+## Intel RST AHCI/RAID driver (v 11.x-16.x, last tested 16.8.3) for Windows XP/2003 ##
 
 These drivers require storport.sys from Windows 7, use backported one 
 

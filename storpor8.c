@@ -131,12 +131,6 @@ typedef enum _STORPORT_FUNCTION_CODE_W10 {
 #define IOCTL_ACPI_ASYNC_EVAL_METHOD \
         CTL_CODE(FILE_DEVICE_ACPI, 0, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
-#if defined(_WIN64) || defined(_M_ALPHA)
-#define STOR_ADDRESS_ALIGN           DECLSPEC_ALIGN(8)
-#else
-#define STOR_ADDRESS_ALIGN
-#endif
-
 
 ///////////////////////////////////////////
 // storport.lib
@@ -200,6 +194,42 @@ enum _DEVICE_STATE
     DeviceStateNoResource = 8
 };
 
+typedef struct _STOR_SCSI_ADDRESS
+{
+    unsigned char PathId;
+    unsigned char TargetId;
+    unsigned char Lun;
+    unsigned char Reserved;
+} STOR_SCSI_ADDRESS;
+
+typedef struct _ACCESS_RANGE        // Size=0x10
+{
+    union _LARGE_INTEGER RangeStart;    // Offset=0x0 Size=0x8
+    unsigned long        RangeLength;   // Offset=0x8 Size=0x4
+    unsigned char        RangeInMemory; // Offset=0xc Size=0x1
+    unsigned char        __endalign[3]; // Offset=0xd Size=0x3
+} ACCESS_RANGE;
+
+
+#if defined(_X86_)
+typedef struct _STOR_ADDR_BTL8// Size=0xc
+{
+    unsigned short Type;// Offset=0x0 Size=0x2
+    unsigned short Port;// Offset=0x2 Size=0x2
+    unsigned long AddressLength;// Offset=0x4 Size=0x4
+    unsigned char Path;// Offset=0x8 Size=0x1
+    unsigned char Target;// Offset=0x9 Size=0x1
+    unsigned char Lun;// Offset=0xa Size=0x1
+    unsigned char Reserved;// Offset=0xb Size=0x1
+} STOR_ADDR_BTL8, *PSTOR_ADDR_BTL8;
+
+typedef struct _STOR_ADDRESS// Size=0xc
+{
+    unsigned short Type;// Offset=0x0 Size=0x2
+    unsigned short Port;// Offset=0x2 Size=0x2
+    unsigned long AddressLength;// Offset=0x4 Size=0x4
+    unsigned char AddressData[1];// Offset=0x8 Size=0x1
+} STOR_ADDRESS, *PSTOR_ADDRESS;
 
 typedef struct _STOR_LOCKED_LIST            // Size=0x10
 {
@@ -207,7 +237,6 @@ typedef struct _STOR_LOCKED_LIST            // Size=0x10
     struct _LIST_ENTRY  List;   // Offset=0x4 Size=0x8
     unsigned long       Count;  // Offset=0xc Size=0x4
 } STOR_LOCKED_LIST;
-
 
 typedef struct _STOR_DICTIONARY             // Size=0x1c
 {
@@ -220,64 +249,27 @@ typedef struct _STOR_DICTIONARY             // Size=0x1c
     unsigned long       (*HashKeyRoutine)(void *);              // Offset=0x18 Size=0x4
 } STOR_DICTIONARY;
 
-
 typedef struct _RAID_RESOURCE_LIST          // Size=0x8
 {
     struct _CM_RESOURCE_LIST *AllocatedResources;   // Offset=0x0 Size=0x4
     struct _CM_RESOURCE_LIST *TranslatedResources;  // Offset=0x4 Size=0x4
 } RAID_RESOURCE_LIST;
 
-
-typedef struct _ACCESS_RANGE                // Size=0x10
-{
-    union _LARGE_INTEGER RangeStart;    // Offset=0x0 Size=0x8
-    unsigned long        RangeLength;   // Offset=0x8 Size=0x4
-    unsigned char        RangeInMemory; // Offset=0xc Size=0x1
-} ACCESS_RANGE;
-
-
 typedef struct _MEMORY_REGION               // Size=0x18
 {
     unsigned char       *VirtualBase;   // Offset=0x0 Size=0x4
-    unsigned char __align0[4];          // Offset=0x4 Size=0x4
+    unsigned char        __align0[4];   // Offset=0x4 Size=0x4
     PHYSICAL_ADDRESS     PhysicalBase;  // Offset=0x8 Size=0x8
     unsigned long        Length;        // Offset=0x10 Size=0x4
+    unsigned char        __endalign[4]; // Offset=0x14 Size=0x4
 } MEMORY_REGION;
-
 
 typedef struct _RAID_BUS_INTERFACE          // Size=0x24
 {
     unsigned char                   Initialized; // Offset=0x0 Size=0x1
+    unsigned char                   __align0[3]; // Offset=0x1 Size=0x3
     struct _BUS_INTERFACE_STANDARD  Interface;   // Offset=0x4 Size=0x20
 } RAID_BUS_INTERFACE;
-
-
-typedef struct _STOR_SCSI_ADDRESS           // Size=0x4
-{
-    unsigned char PathId;               // Offset=0x0 Size=0x1
-    unsigned char TargetId;             // Offset=0x1 Size=0x1
-    unsigned char Lun;                  // Offset=0x2 Size=0x1
-    unsigned char Reserved;             // Offset=0x3 Size=0x1
-} STOR_SCSI_ADDRESS;
-
-
-typedef struct STOR_ADDRESS_ALIGN _STOR_ADDR_BTL8 { // Size=0xc
-    unsigned short Type;          // Offset=0x0 Size=0x2
-    unsigned short Port;          // Offset=0x2 Size=0x2
-    unsigned long  AddressLength; // Offset=0x4 Size=0x4
-    unsigned char  Path;          // Offset=0x8 Size=0x1
-    unsigned char  Target;        // Offset=0x9 Size=0x1
-    unsigned char  Lun;           // Offset=0xa Size=0x1
-    unsigned char  Reserved;      // Offset=0xb Size=0x1
-} STOR_ADDR_BTL8, *PSTOR_ADDR_BTL8;
-
-
-typedef struct STOR_ADDRESS_ALIGN _STOR_ADDRESS {
-    USHORT Type;
-    USHORT Port;
-    ULONG  AddressLength;
-    UCHAR  AddressData[4];
-} STOR_ADDRESS, *PSTOR_ADDRESS;
 
 
 #ifndef STORPORT_W8
@@ -289,73 +281,78 @@ typedef struct _RAID_POWER_STATE    // Size=0xc
     enum _SYSTEM_POWER_STATE SystemState;           // Offset=0x0 Size=0x4
     enum _DEVICE_POWER_STATE DeviceState;           // Offset=0x4 Size=0x4
     unsigned char            SystemPoweringDown;    // Offset=0x8 Size=0x1
+    unsigned char            __endalign[3];         // Offset=0x9 Size=0x3
 } RAID_POWER_STATE;
-
 
 typedef struct _PORT_CONFIGURATION_INFORMATION  // Size=0xc0
 {
-    unsigned long Length;                                              // Offset=0x0 Size=0x4
-    unsigned long SystemIoBusNumber;                                   // Offset=0x4 Size=0x4
-    enum _INTERFACE_TYPE AdapterInterfaceType;                         // Offset=0x8 Size=0x4
-    unsigned long BusInterruptLevel;                                   // Offset=0xc Size=0x4
-    unsigned long BusInterruptVector;                                  // Offset=0x10 Size=0x4
-    enum _KINTERRUPT_MODE InterruptMode;                               // Offset=0x14 Size=0x4
-    unsigned long MaximumTransferLength;                               // Offset=0x18 Size=0x4
-    unsigned long NumberOfPhysicalBreaks;                              // Offset=0x1c Size=0x4
-    unsigned long DmaChannel;                                          // Offset=0x20 Size=0x4
-    unsigned long DmaPort;                                             // Offset=0x24 Size=0x4
-    enum _DMA_WIDTH DmaWidth;                                          // Offset=0x28 Size=0x4
-    enum _DMA_SPEED DmaSpeed;                                          // Offset=0x2c Size=0x4
-    unsigned long AlignmentMask;                                       // Offset=0x30 Size=0x4
-    unsigned long NumberOfAccessRanges;                                // Offset=0x34 Size=0x4
-    struct _ACCESS_RANGE *AccessRanges;                                // Offset=0x38 Size=0x4
-    void *Reserved;                                                    // Offset=0x3c Size=0x4
-    unsigned char NumberOfBuses;                                       // Offset=0x40 Size=0x1
-    char InitiatorBusId[8];                                            // Offset=0x41 Size=0x8
-    unsigned char ScatterGather;                                       // Offset=0x49 Size=0x1
-    unsigned char Master;                                              // Offset=0x4a Size=0x1
-    unsigned char CachesData;                                          // Offset=0x4b Size=0x1
-    unsigned char AdapterScansDown;                                    // Offset=0x4c Size=0x1
-    unsigned char AtdiskPrimaryClaimed;                                // Offset=0x4d Size=0x1
-    unsigned char AtdiskSecondaryClaimed;                              // Offset=0x4e Size=0x1
-    unsigned char Dma32BitAddresses;                                   // Offset=0x4f Size=0x1
-    unsigned char DemandMode;                                          // Offset=0x50 Size=0x1
-    unsigned char MapBuffers;                                          // Offset=0x51 Size=0x1
-    unsigned char NeedPhysicalAddresses;                               // Offset=0x52 Size=0x1
-    unsigned char TaggedQueuing;                                       // Offset=0x53 Size=0x1
-    unsigned char AutoRequestSense;                                    // Offset=0x54 Size=0x1
-    unsigned char MultipleRequestPerLu;                                // Offset=0x55 Size=0x1
-    unsigned char ReceiveEvent;                                        // Offset=0x56 Size=0x1
-    unsigned char RealModeInitialized;                                 // Offset=0x57 Size=0x1
-    unsigned char BufferAccessScsiPortControlled;                      // Offset=0x58 Size=0x1
-    unsigned char MaximumNumberOfTargets;                              // Offset=0x59 Size=0x1
-    unsigned char ReservedUchars[2];                                   // Offset=0x5a Size=0x2
-    unsigned long SlotNumber;                                          // Offset=0x5c Size=0x4
-    unsigned long BusInterruptLevel2;                                  // Offset=0x60 Size=0x4
-    unsigned long BusInterruptVector2;                                 // Offset=0x64 Size=0x4
-    enum _KINTERRUPT_MODE InterruptMode2;                              // Offset=0x68 Size=0x4
-    unsigned long DmaChannel2;                                         // Offset=0x6c Size=0x4
-    unsigned long DmaPort2;                                            // Offset=0x70 Size=0x4
-    enum _DMA_WIDTH DmaWidth2;                                         // Offset=0x74 Size=0x4
-    enum _DMA_SPEED DmaSpeed2;                                         // Offset=0x78 Size=0x4
-    unsigned long DeviceExtensionSize;                                 // Offset=0x7c Size=0x4
-    unsigned long SpecificLuExtensionSize;                             // Offset=0x80 Size=0x4
-    unsigned long SrbExtensionSize;                                    // Offset=0x84 Size=0x4
-    unsigned char Dma64BitAddresses;                                   // Offset=0x88 Size=0x1
-    unsigned char ResetTargetSupported;                                // Offset=0x89 Size=0x1
-    unsigned char MaximumNumberOfLogicalUnits;                         // Offset=0x8a Size=0x1
-    unsigned char WmiDataProvider;                                     // Offset=0x8b Size=0x1
-    enum _STOR_SYNCHRONIZATION_MODEL SynchronizationModel;             // Offset=0x8c Size=0x4
-    unsigned char (*HwMSInterruptRoutine)(void *, unsigned long);      // Offset=0x90 Size=0x4
-    enum _INTERRUPT_SYNCHRONIZATION_MODE InterruptSynchronizationMode; // Offset=0x94 Size=0x4
-    struct _MEMORY_REGION DumpRegion;                                  // Offset=0x98 Size=0x18
-    unsigned long RequestedDumpBufferSize;                             // Offset=0xb0 Size=0x4
-    unsigned char VirtualDevice;                                       // Offset=0xb4 Size=0x1
-    //unsigned char __align0[3];                                       // Offset=0xb5 Size=0x3
-    unsigned long ExtendedFlags1;                                      // Offset=0xb8 Size=0x4
-    unsigned long MaxNumberOfIO;                                       // Offset=0xbc Size=0x4
+    unsigned long Length;// Offset=0x0 Size=0x4
+    unsigned long SystemIoBusNumber;// Offset=0x4 Size=0x4
+    enum _INTERFACE_TYPE AdapterInterfaceType;// Offset=0x8 Size=0x4
+    unsigned long BusInterruptLevel;// Offset=0xc Size=0x4
+    unsigned long BusInterruptVector;// Offset=0x10 Size=0x4
+    enum _KINTERRUPT_MODE InterruptMode;// Offset=0x14 Size=0x4
+    unsigned long MaximumTransferLength;// Offset=0x18 Size=0x4
+    unsigned long NumberOfPhysicalBreaks;// Offset=0x1c Size=0x4
+    unsigned long DmaChannel;// Offset=0x20 Size=0x4
+    unsigned long DmaPort;// Offset=0x24 Size=0x4
+    enum _DMA_WIDTH DmaWidth;// Offset=0x28 Size=0x4
+    enum _DMA_SPEED DmaSpeed;// Offset=0x2c Size=0x4
+    unsigned long AlignmentMask;// Offset=0x30 Size=0x4
+    unsigned long NumberOfAccessRanges;// Offset=0x34 Size=0x4
+    ACCESS_RANGE (*AccessRanges)[];// Offset=0x38 Size=0x4
+    void *Reserved;// Offset=0x3c Size=0x4
+    unsigned char NumberOfBuses;// Offset=0x40 Size=0x1
+    char InitiatorBusId[8];// Offset=0x41 Size=0x8
+    unsigned char ScatterGather;// Offset=0x49 Size=0x1
+    unsigned char Master;// Offset=0x4a Size=0x1
+    unsigned char CachesData;// Offset=0x4b Size=0x1
+    unsigned char AdapterScansDown;// Offset=0x4c Size=0x1
+    unsigned char AtdiskPrimaryClaimed;// Offset=0x4d Size=0x1
+    unsigned char AtdiskSecondaryClaimed;// Offset=0x4e Size=0x1
+    unsigned char Dma32BitAddresses;// Offset=0x4f Size=0x1
+    unsigned char DemandMode;// Offset=0x50 Size=0x1
+    unsigned char MapBuffers;// Offset=0x51 Size=0x1
+    unsigned char NeedPhysicalAddresses;// Offset=0x52 Size=0x1
+    unsigned char TaggedQueuing;// Offset=0x53 Size=0x1
+    unsigned char AutoRequestSense;// Offset=0x54 Size=0x1
+    unsigned char MultipleRequestPerLu;// Offset=0x55 Size=0x1
+    unsigned char ReceiveEvent;// Offset=0x56 Size=0x1
+    unsigned char RealModeInitialized;// Offset=0x57 Size=0x1
+    unsigned char BufferAccessScsiPortControlled;// Offset=0x58 Size=0x1
+    unsigned char MaximumNumberOfTargets;// Offset=0x59 Size=0x1
+    unsigned char ReservedUchars[2];// Offset=0x5a Size=0x2
+    unsigned long SlotNumber;// Offset=0x5c Size=0x4
+    unsigned long BusInterruptLevel2;// Offset=0x60 Size=0x4
+    unsigned long BusInterruptVector2;// Offset=0x64 Size=0x4
+    enum _KINTERRUPT_MODE InterruptMode2;// Offset=0x68 Size=0x4
+    unsigned long DmaChannel2;// Offset=0x6c Size=0x4
+    unsigned long DmaPort2;// Offset=0x70 Size=0x4
+    enum _DMA_WIDTH DmaWidth2;// Offset=0x74 Size=0x4
+    enum _DMA_SPEED DmaSpeed2;// Offset=0x78 Size=0x4
+    unsigned long DeviceExtensionSize;// Offset=0x7c Size=0x4
+    unsigned long SpecificLuExtensionSize;// Offset=0x80 Size=0x4
+    unsigned long SrbExtensionSize;// Offset=0x84 Size=0x4
+    unsigned char Dma64BitAddresses;// Offset=0x88 Size=0x1
+    unsigned char ResetTargetSupported;// Offset=0x89 Size=0x1
+    unsigned char MaximumNumberOfLogicalUnits;// Offset=0x8a Size=0x1
+    unsigned char WmiDataProvider;// Offset=0x8b Size=0x1
+    enum _STOR_SYNCHRONIZATION_MODEL SynchronizationModel;// Offset=0x8c Size=0x4
+    unsigned char  ( *HwMSInterruptRoutine)(void *,unsigned long );// Offset=0x90 Size=0x4
+    enum _INTERRUPT_SYNCHRONIZATION_MODE InterruptSynchronizationMode;// Offset=0x94 Size=0x4
+    struct _MEMORY_REGION DumpRegion;// Offset=0x98 Size=0x18
+    unsigned long RequestedDumpBufferSize;// Offset=0xb0 Size=0x4
+    unsigned char VirtualDevice;// Offset=0xb4 Size=0x1
+    unsigned char __align0[3];// Offset=0xb5 Size=0x3
+    unsigned long ExtendedFlags1;// Offset=0xb8 Size=0x4
+    unsigned long MaxNumberOfIO;// Offset=0xbc Size=0x4
 } PORT_CONFIGURATION_INFORMATION;
 
+struct _unnamed_tag1    // Size=0x1
+{
+    unsigned char InFindAdapter:1;// Offset=0x0 Size=0x1 BitOffset=0x0 BitSize=0x1
+    unsigned char IsVirtual:1;// Offset=0x0 Size=0x1 BitOffset=0x1 BitSize=0x1
+};
 
 typedef struct _RAID_MINIPORT   // Size=0xd8
 {
@@ -364,44 +361,57 @@ typedef struct _RAID_MINIPORT   // Size=0xd8
     struct _PORT_CONFIGURATION_INFORMATION PortConfiguration; // Offset=0x8 Size=0xc0
     struct _HW_INITIALIZATION_DATA *HwInitializationData;     // Offset=0xc8 Size=0x4
     struct _RAID_HW_DEVICE_EXT *PrivateDeviceExt;             // Offset=0xcc Size=0x4
-    unsigned char Flags[8];                                   // Offset=0xd0 Size=0x8
+    struct _unnamed_tag1 Flags;                               // Offset=0xd0 Size=0x1
+    unsigned char __endalign[7];                              // Offset=0xd1 Size=0x7
 } RAID_MINIPORT;
 
+struct _unnamed_tag3// Size=0x4
+{
+    unsigned char InitializedMiniport:1;// Offset=0x0 Size=0x1 BitOffset=0x0 BitSize=0x1
+    unsigned char WmiMiniPortInitialized:1;// Offset=0x0 Size=0x1 BitOffset=0x1 BitSize=0x1
+    unsigned char WmiInitialized:1;// Offset=0x0 Size=0x1 BitOffset=0x2 BitSize=0x1
+    unsigned char BusInterfaceInternal:1;// Offset=0x0 Size=0x1 BitOffset=0x3 BitSize=0x1
+    unsigned char InHwInitialize:1;// Offset=0x0 Size=0x1 BitOffset=0x4 BitSize=0x1
+    unsigned char IdlePowerManagementEnabled:1;// Offset=0x0 Size=0x1 BitOffset=0x5 BitSize=0x1
+    unsigned char QueryAccessAlignmentEnabled:1;// Offset=0x0 Size=0x1 BitOffset=0x6 BitSize=0x1
+    unsigned char InvalidateBusRelations;// Offset=0x1 Size=0x1
+    unsigned char RescanBus;// Offset=0x2 Size=0x1
+    unsigned char InterruptsEnabled;// Offset=0x3 Size=0x1
+};
 
 typedef struct _RAID_ADAPTER_EXTENSION  // Size=0x5e0
 {
-    enum _RAID_OBJECT_TYPE ObjectType;              // Offset=0x0 Size=0x4
-    struct _DEVICE_OBJECT *DeviceObject;            // Offset=0x4 Size=0x4
-    struct _RAID_DRIVER_EXTENSION *Driver;          // Offset=0x8 Size=0x4
-    struct _DEVICE_OBJECT *LowerDeviceObject;       // Offset=0xc Size=0x4
-    struct _DEVICE_OBJECT *PhysicalDeviceObject;    // Offset=0x10 Size=0x4
-    struct _UNICODE_STRING DeviceName;              // Offset=0x14 Size=0x8
-    unsigned long PortNumber;                       // Offset=0x1c Size=0x4
-    struct _LIST_ENTRY NextAdapter;                 // Offset=0x20 Size=0x8
-    unsigned long SlowLock;                         // Offset=0x28 Size=0x4
-    enum _DEVICE_STATE DeviceState;                 // Offset=0x2c Size=0x4
-    unsigned long PagingPathCount;                  // Offset=0x30 Size=0x4
-    unsigned long CrashDumpPathCount;               // Offset=0x34 Size=0x4
-    unsigned long HiberPathCount;                   // Offset=0x38 Size=0x4
-    unsigned long Flags;                            // Offset=0x3c Size=0x4
-    struct _STOR_LOCKED_LIST UnitList;              // Offset=0x40 Size=0x10
-    struct _STOR_DICTIONARY UnitDictionary;         // Offset=0x50 Size=0x1c
-    struct _STOR_LOCKED_LIST ZombieList;            // Offset=0x6c Size=0x10
-    unsigned char __align0[4];                      // Offset=0x7c Size=0x4
-    union _SLIST_HEADER CompletedList;              // Offset=0x80 Size=0x8
-    struct _EX_RUNDOWN_REF_CACHE_AWARE *RemoveLock; // Offset=0x88 Size=0x4
-    struct _RAID_POWER_STATE Power;                 // Offset=0x8c Size=0xc
-    struct _RAID_RESOURCE_LIST ResourceList;        // Offset=0x98 Size=0x8
-    struct _RAID_MINIPORT Miniport;                 // Offset=0xa0 Size=0xd8
-    struct _RAID_BUS_INTERFACE Bus;                 // Offset=0x178 Size=0x24
-    struct _KINTERRUPT *Interrupt;                  // Offset=0x19c Size=0x4
-    unsigned long InterruptIrql;                    // Offset=0x1a0 Size=0x4
-    unsigned long InterruptVersion;                 // Offset=0x1a4 Size=0x4
-    KSPIN_LOCK StartIoLock;                         // Offset=0x1a8 Size=0x4
-    enum _STOR_SYNCHRONIZATION_MODEL IoModel;       // Offset=0x1ac Size=0x4
+    enum _RAID_OBJECT_TYPE ObjectType;// Offset=0x0 Size=0x4
+    struct _DEVICE_OBJECT *DeviceObject;// Offset=0x4 Size=0x4
+    struct _RAID_DRIVER_EXTENSION *Driver;// Offset=0x8 Size=0x4
+    struct _DEVICE_OBJECT *LowerDeviceObject;// Offset=0xc Size=0x4
+    struct _DEVICE_OBJECT *PhysicalDeviceObject;// Offset=0x10 Size=0x4
+    struct _UNICODE_STRING DeviceName;// Offset=0x14 Size=0x8
+    unsigned long PortNumber;// Offset=0x1c Size=0x4
+    struct _LIST_ENTRY NextAdapter;// Offset=0x20 Size=0x8
+    unsigned long SlowLock;// Offset=0x28 Size=0x4
+    enum _DEVICE_STATE DeviceState;// Offset=0x2c Size=0x4
+    unsigned long PagingPathCount;// Offset=0x30 Size=0x4
+    unsigned long CrashDumpPathCount;// Offset=0x34 Size=0x4
+    unsigned long HiberPathCount;// Offset=0x38 Size=0x4
+    struct _unnamed_tag3 Flags;// Offset=0x3c Size=0x4
+    struct _STOR_LOCKED_LIST UnitList;// Offset=0x40 Size=0x10
+    struct _STOR_DICTIONARY UnitDictionary;// Offset=0x50 Size=0x1c
+    struct _STOR_LOCKED_LIST ZombieList;// Offset=0x6c Size=0x10
+    unsigned char __align0[4];// Offset=0x7c Size=0x4
+    union _SLIST_HEADER CompletedList;// Offset=0x80 Size=0x8
+    struct _EX_RUNDOWN_REF_CACHE_AWARE *RemoveLock;// Offset=0x88 Size=0x4
+    struct _RAID_POWER_STATE Power;// Offset=0x8c Size=0xc
+    struct _RAID_RESOURCE_LIST ResourceList;// Offset=0x98 Size=0x8
+    struct _RAID_MINIPORT Miniport;// Offset=0xa0 Size=0xd8
+    struct _RAID_BUS_INTERFACE Bus;// Offset=0x178 Size=0x24
+    struct _KINTERRUPT *Interrupt;// Offset=0x19c Size=0x4
+    unsigned long InterruptIrql;// Offset=0x1a0 Size=0x4
+    unsigned long InterruptVersion;// Offset=0x1a4 Size=0x4
+    unsigned long StartIoLock;// Offset=0x1a8 Size=0x4
+    enum _STOR_SYNCHRONIZATION_MODEL IoModel;// Offset=0x1ac Size=0x4
     // ...
 } RAID_ADAPTER_EXTENSION, *PRAID_ADAPTER_EXTENSION;
-
 
 #pragma warning(push)
 #pragma warning(disable:4200)               // HwDeviceExtension[] warning
@@ -412,22 +422,278 @@ typedef struct _RAID_HW_DEVICE_EXT          // Size=0x4
 } RAID_HW_DEVICE_EXT;
 #pragma warning(pop)
 
-
 typedef struct _RAID_UNIT_EXTENSION             // Size=0x2a0
 {
-    enum _RAID_OBJECT_TYPE ObjectType;       // Offset=0x0 Size=0x4
-    struct _DEVICE_OBJECT *DeviceObject;     // Offset=0x4 Size=0x4
-    struct _RAID_ADAPTER_EXTENSION *Adapter; // Offset=0x8 Size=0x4
-    unsigned long SlowLock;                  // Offset=0xc Size=0x4
-    enum _DEVICE_STATE DeviceState;          // Offset=0x10 Size=0x4
-    struct _LIST_ENTRY NextUnit;             // Offset=0x14 Size=0x8
-    struct _LIST_ENTRY UnitTableLink;        // Offset=0x1c Size=0x8
-    struct _STOR_SCSI_ADDRESS Address;       // Offset=0x24 Size=0x4
+    enum _RAID_OBJECT_TYPE ObjectType;// Offset=0x0 Size=0x4
+    struct _DEVICE_OBJECT *DeviceObject;// Offset=0x4 Size=0x4
+    struct _RAID_ADAPTER_EXTENSION *Adapter;// Offset=0x8 Size=0x4
+    unsigned long SlowLock;// Offset=0xc Size=0x4
+    enum _DEVICE_STATE DeviceState;// Offset=0x10 Size=0x4
+    struct _LIST_ENTRY NextUnit;// Offset=0x14 Size=0x8
+    struct _LIST_ENTRY UnitTableLink;// Offset=0x1c Size=0x8
+    struct _STOR_SCSI_ADDRESS Address;// Offset=0x24 Size=0x4
     //...
 } RAID_UNIT_EXTENSION, *PRAID_UNIT_EXTENSION;
 
+typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
+{
+    RAID_ADAPTER_EXTENSION *Adapter;               // Offset=0x0 Size=0x4
+    unsigned char __align0[4];                     // Offset=0x4 Size=0x4
+    KTIMER                  Timer;                 // Offset=0x8 Size=0x28
+    KDPC                    TimerDpc;              // Offset=0x30 Size=0x20
+    void         (*Callback)(void *, void *);      // Offset=0x50 Size=0x4
+    void                   *CallbackContext;       // Offset=0x54 Size=0x4
+    IO_WORKITEM            *FreeTimerWorkItem;     // Offset=0x58 Size=0x4
+    unsigned char          __endalign[4];          // Offset=0x5c Size=0x4
+} STOR_TIMER_CONTEXT;
 
-#else 
+#endif
+
+#else   // x64
+typedef struct _STOR_ADDR_BTL8// Size=0x10
+{
+    unsigned short Type;// Offset=0x0 Size=0x2
+    unsigned short Port;// Offset=0x2 Size=0x2
+    unsigned long AddressLength;// Offset=0x4 Size=0x4
+    unsigned char Path;// Offset=0x8 Size=0x1
+    unsigned char Target;// Offset=0x9 Size=0x1
+    unsigned char Lun;// Offset=0xa Size=0x1
+    unsigned char Reserved;// Offset=0xb Size=0x1
+    unsigned char __endalign[4];// Offset=0xc Size=0x4
+} STOR_ADDR_BTL8, *PSTOR_ADDR_BTL8;
+
+typedef struct _STOR_ADDRESS// Size=0x10
+{
+    unsigned short Type;// Offset=0x0 Size=0x2
+    unsigned short Port;// Offset=0x2 Size=0x2
+    unsigned long AddressLength;// Offset=0x4 Size=0x4
+    unsigned char AddressData[1];// Offset=0x8 Size=0x1
+    unsigned char __endalign[7];// Offset=0x9 Size=0x7
+} STOR_ADDRESS, *PSTOR_ADDRESS;
+
+typedef struct _STOR_LOCKED_LIST    // Size=0x20
+{
+    unsigned long long  Lock;           // Offset=0x0 Size=0x8
+    struct _LIST_ENTRY  List;           // Offset=0x8 Size=0x10
+    unsigned long       Count;          // Offset=0x18 Size=0x4
+    unsigned char       __endalign[4];  // Offset=0x1c Size=0x4
+} STOR_LOCKED_LIST;
+
+typedef struct _STOR_DICTIONARY     // Size=0x30
+{
+    unsigned long   EntryCount;                                 // Offset=0x0 Size=0x4
+    unsigned long   MaxEntryCount;                              // Offset=0x4 Size=0x4
+    enum _POOL_TYPE PoolType;                                   // Offset=0x8 Size=0x4
+    unsigned char   __align0[4];                                // Offset=0xc Size=0x4
+    struct          _LIST_ENTRY *Entries;                       // Offset=0x10 Size=0x8
+    void            *(*GetKeyRoutine)(struct _LIST_ENTRY *);    // Offset=0x18 Size=0x8
+    long            (*CompareKeyRoutine)(void *, void *);       // Offset=0x20 Size=0x8
+    unsigned long   (*HashKeyRoutine)(void *);                  // Offset=0x28 Size=0x8
+} STOR_DICTIONARY;
+
+typedef struct _RAID_RESOURCE_LIST  // Size=0x10
+{
+    struct _CM_RESOURCE_LIST *AllocatedResources;   // Offset=0x0 Size=0x8
+    struct _CM_RESOURCE_LIST *TranslatedResources;  // Offset=0x8 Size=0x8
+} RAID_RESOURCE_LIST;
+
+typedef struct _MEMORY_REGION           // Size=0x18
+{
+    unsigned char        *VirtualBase;  // Offset=0x0 Size=0x8
+    union _LARGE_INTEGER PhysicalBase;  // Offset=0x8 Size=0x8
+    unsigned long        Length;        // Offset=0x10 Size=0x4
+    unsigned char        __endalign[4]; // Offset=0x14 Size=0x4
+} MEMORY_REGION;
+
+typedef struct _RAID_BUS_INTERFACE      // Size=0x48
+{
+    unsigned char                   Initialized;    // Offset=0x0 Size=0x1
+    unsigned char                   __align0[7];    // Offset=0x1 Size=0x7
+    struct _BUS_INTERFACE_STANDARD  Interface;      // Offset=0x8 Size=0x40
+} RAID_BUS_INTERFACE;
+
+
+#ifndef STORPORT_W8
+///////////////////////////////////////////////////////////////////
+//                         Win7 storport                         //
+
+typedef struct _RAID_POWER_STATE    // Size=0xc
+{
+    enum _SYSTEM_POWER_STATE SystemState;           // Offset=0x0 Size=0x4
+    enum _DEVICE_POWER_STATE DeviceState;           // Offset=0x4 Size=0x4
+    unsigned char            SystemPoweringDown;    // Offset=0x8 Size=0x1
+    unsigned char            __endalign[3];         // Offset=0x9 Size=0x3
+} RAID_POWER_STATE;
+
+typedef struct _PORT_CONFIGURATION_INFORMATION// Size=0xd0
+{
+    unsigned long Length;// Offset=0x0 Size=0x4
+    unsigned long SystemIoBusNumber;// Offset=0x4 Size=0x4
+    enum _INTERFACE_TYPE AdapterInterfaceType;// Offset=0x8 Size=0x4
+    unsigned long BusInterruptLevel;// Offset=0xc Size=0x4
+    unsigned long BusInterruptVector;// Offset=0x10 Size=0x4
+    enum _KINTERRUPT_MODE InterruptMode;// Offset=0x14 Size=0x4
+    unsigned long MaximumTransferLength;// Offset=0x18 Size=0x4
+    unsigned long NumberOfPhysicalBreaks;// Offset=0x1c Size=0x4
+    unsigned long DmaChannel;// Offset=0x20 Size=0x4
+    unsigned long DmaPort;// Offset=0x24 Size=0x4
+    enum _DMA_WIDTH DmaWidth;// Offset=0x28 Size=0x4
+    enum _DMA_SPEED DmaSpeed;// Offset=0x2c Size=0x4
+    unsigned long AlignmentMask;// Offset=0x30 Size=0x4
+    unsigned long NumberOfAccessRanges;// Offset=0x34 Size=0x4
+    ACCESS_RANGE (*AccessRanges)[];// Offset=0x38 Size=0x8
+    void *Reserved;// Offset=0x40 Size=0x8
+    unsigned char NumberOfBuses;// Offset=0x48 Size=0x1
+    char InitiatorBusId[8];// Offset=0x49 Size=0x8
+    unsigned char ScatterGather;// Offset=0x51 Size=0x1
+    unsigned char Master;// Offset=0x52 Size=0x1
+    unsigned char CachesData;// Offset=0x53 Size=0x1
+    unsigned char AdapterScansDown;// Offset=0x54 Size=0x1
+    unsigned char AtdiskPrimaryClaimed;// Offset=0x55 Size=0x1
+    unsigned char AtdiskSecondaryClaimed;// Offset=0x56 Size=0x1
+    unsigned char Dma32BitAddresses;// Offset=0x57 Size=0x1
+    unsigned char DemandMode;// Offset=0x58 Size=0x1
+    unsigned char MapBuffers;// Offset=0x59 Size=0x1
+    unsigned char NeedPhysicalAddresses;// Offset=0x5a Size=0x1
+    unsigned char TaggedQueuing;// Offset=0x5b Size=0x1
+    unsigned char AutoRequestSense;// Offset=0x5c Size=0x1
+    unsigned char MultipleRequestPerLu;// Offset=0x5d Size=0x1
+    unsigned char ReceiveEvent;// Offset=0x5e Size=0x1
+    unsigned char RealModeInitialized;// Offset=0x5f Size=0x1
+    unsigned char BufferAccessScsiPortControlled;// Offset=0x60 Size=0x1
+    unsigned char MaximumNumberOfTargets;// Offset=0x61 Size=0x1
+    unsigned char ReservedUchars[2];// Offset=0x62 Size=0x2
+    unsigned long SlotNumber;// Offset=0x64 Size=0x4
+    unsigned long BusInterruptLevel2;// Offset=0x68 Size=0x4
+    unsigned long BusInterruptVector2;// Offset=0x6c Size=0x4
+    enum _KINTERRUPT_MODE InterruptMode2;// Offset=0x70 Size=0x4
+    unsigned long DmaChannel2;// Offset=0x74 Size=0x4
+    unsigned long DmaPort2;// Offset=0x78 Size=0x4
+    enum _DMA_WIDTH DmaWidth2;// Offset=0x7c Size=0x4
+    enum _DMA_SPEED DmaSpeed2;// Offset=0x80 Size=0x4
+    unsigned long DeviceExtensionSize;// Offset=0x84 Size=0x4
+    unsigned long SpecificLuExtensionSize;// Offset=0x88 Size=0x4
+    unsigned long SrbExtensionSize;// Offset=0x8c Size=0x4
+    unsigned char Dma64BitAddresses;// Offset=0x90 Size=0x1
+    unsigned char ResetTargetSupported;// Offset=0x91 Size=0x1
+    unsigned char MaximumNumberOfLogicalUnits;// Offset=0x92 Size=0x1
+    unsigned char WmiDataProvider;// Offset=0x93 Size=0x1
+    enum _STOR_SYNCHRONIZATION_MODEL SynchronizationModel;// Offset=0x94 Size=0x4
+    unsigned char  ( *HwMSInterruptRoutine)(void *,unsigned long );// Offset=0x98 Size=0x8
+    enum _INTERRUPT_SYNCHRONIZATION_MODE InterruptSynchronizationMode;// Offset=0xa0 Size=0x4
+    unsigned char __align0[4];// Offset=0xa4 Size=0x4
+    struct _MEMORY_REGION DumpRegion;// Offset=0xa8 Size=0x18
+    unsigned long RequestedDumpBufferSize;// Offset=0xc0 Size=0x4
+    unsigned char VirtualDevice;// Offset=0xc4 Size=0x1
+    unsigned char __align1[3];// Offset=0xc5 Size=0x3
+    unsigned long ExtendedFlags1;// Offset=0xc8 Size=0x4
+    unsigned long MaxNumberOfIO;// Offset=0xcc Size=0x4
+} PORT_CONFIGURATION_INFORMATION;
+
+struct _unnamed_tag1// Size=0x1
+{
+    unsigned char InFindAdapter:1;// Offset=0x0 Size=0x1 BitOffset=0x0 BitSize=0x1
+};
+
+typedef struct _RAID_MINIPORT// Size=0xf0
+{
+    struct _RAID_ADAPTER_EXTENSION *Adapter;// Offset=0x0 Size=0x8
+    struct _PORT_CONFIGURATION_INFORMATION PortConfiguration;// Offset=0x8 Size=0xd0
+    struct _HW_INITIALIZATION_DATA *HwInitializationData;// Offset=0xd8 Size=0x8
+    struct _RAID_HW_DEVICE_EXT *PrivateDeviceExt;// Offset=0xe0 Size=0x8
+    struct _unnamed_tag1 Flags;// Offset=0xe8 Size=0x1
+    unsigned char __endalign[7];// Offset=0xe9 Size=0x7
+} RAID_MINIPORT;
+
+struct _unnamed_tag2// Size=0x4
+{
+    unsigned char InitializedMiniport:1;// Offset=0x0 Size=0x1 BitOffset=0x0 BitSize=0x1
+    unsigned char WmiMiniPortInitialized:1;// Offset=0x0 Size=0x1 BitOffset=0x1 BitSize=0x1
+    unsigned char WmiInitialized:1;// Offset=0x0 Size=0x1 BitOffset=0x2 BitSize=0x1
+    unsigned char BusInterfaceInternal:1;// Offset=0x0 Size=0x1 BitOffset=0x3 BitSize=0x1
+    unsigned char InHwInitialize:1;// Offset=0x0 Size=0x1 BitOffset=0x4 BitSize=0x1
+    unsigned char IdlePowerManagementEnabled:1;// Offset=0x0 Size=0x1 BitOffset=0x5 BitSize=0x1
+    unsigned char QueryAccessAlignmentEnabled:1;// Offset=0x0 Size=0x1 BitOffset=0x6 BitSize=0x1
+    unsigned char InvalidateBusRelations;// Offset=0x1 Size=0x1
+    unsigned char RescanBus;// Offset=0x2 Size=0x1
+    unsigned char InterruptsEnabled;// Offset=0x3 Size=0x1
+};
+
+typedef struct _RAID_ADAPTER_EXTENSION// Size=0x990
+{
+    enum _RAID_OBJECT_TYPE ObjectType;// Offset=0x0 Size=0x4
+    unsigned char __align0[4];// Offset=0x4 Size=0x4
+    struct _DEVICE_OBJECT *DeviceObject;// Offset=0x8 Size=0x8
+    struct _RAID_DRIVER_EXTENSION *Driver;// Offset=0x10 Size=0x8
+    struct _DEVICE_OBJECT *LowerDeviceObject;// Offset=0x18 Size=0x8
+    struct _DEVICE_OBJECT *PhysicalDeviceObject;// Offset=0x20 Size=0x8
+    struct _UNICODE_STRING DeviceName;// Offset=0x28 Size=0x10
+    unsigned long PortNumber;// Offset=0x38 Size=0x4
+    unsigned char __align1[4];// Offset=0x3c Size=0x4
+    struct _LIST_ENTRY NextAdapter;// Offset=0x40 Size=0x10
+    unsigned long long SlowLock;// Offset=0x50 Size=0x8
+    enum _DEVICE_STATE DeviceState;// Offset=0x58 Size=0x4
+    unsigned long PagingPathCount;// Offset=0x5c Size=0x4
+    unsigned long CrashDumpPathCount;// Offset=0x60 Size=0x4
+    unsigned long HiberPathCount;// Offset=0x64 Size=0x4
+    struct _unnamed_tag2 Flags;// Offset=0x68 Size=0x4
+    unsigned char __align2[4];// Offset=0x6c Size=0x4
+    struct _STOR_LOCKED_LIST UnitList;// Offset=0x70 Size=0x20
+    struct _STOR_DICTIONARY UnitDictionary;// Offset=0x90 Size=0x30
+    struct _STOR_LOCKED_LIST ZombieList;// Offset=0xc0 Size=0x20
+    union _SLIST_HEADER CompletedList;// Offset=0xe0 Size=0x10
+    struct _EX_RUNDOWN_REF_CACHE_AWARE *RemoveLock;// Offset=0xf0 Size=0x8
+    struct _RAID_POWER_STATE Power;// Offset=0xf8 Size=0xc
+    unsigned char __align3[4];// Offset=0x104 Size=0x4
+    struct _RAID_RESOURCE_LIST ResourceList;// Offset=0x108 Size=0x10
+    struct _RAID_MINIPORT Miniport;// Offset=0x118 Size=0xf0
+    struct _RAID_BUS_INTERFACE Bus;// Offset=0x208 Size=0x48
+    struct _KINTERRUPT *Interrupt;// Offset=0x250 Size=0x8
+    unsigned long InterruptIrql;// Offset=0x258 Size=0x4
+    unsigned char __align4[4];// Offset=0x25c Size=0x4
+    unsigned long long StartIoLock;// Offset=0x260 Size=0x8
+    enum _STOR_SYNCHRONIZATION_MODEL IoModel;// Offset=0x268 Size=0x4
+    // ...
+} RAID_ADAPTER_EXTENSION, *PRAID_ADAPTER_EXTENSION;
+
+#pragma warning(push)
+#pragma warning(disable:4200)               // HwDeviceExtension[] warning
+typedef struct _RAID_HW_DEVICE_EXT// Size=0x8
+{
+    struct _RAID_MINIPORT *Miniport;// Offset=0x0 Size=0x8
+    unsigned char HwDeviceExtension[];      // Offset=0x8
+} RAID_HW_DEVICE_EXT;
+#pragma warning(pop)
+
+typedef struct _RAID_UNIT_EXTENSION// Size=0x480
+{
+    enum _RAID_OBJECT_TYPE ObjectType;// Offset=0x0 Size=0x4
+    unsigned char __align0[4];// Offset=0x4 Size=0x4
+    struct _DEVICE_OBJECT *DeviceObject;// Offset=0x8 Size=0x8
+    struct _RAID_ADAPTER_EXTENSION *Adapter;// Offset=0x10 Size=0x8
+    unsigned long long SlowLock;// Offset=0x18 Size=0x8
+    enum _DEVICE_STATE DeviceState;// Offset=0x20 Size=0x4
+    unsigned char __align1[4];// Offset=0x24 Size=0x4
+    struct _LIST_ENTRY NextUnit;// Offset=0x28 Size=0x10
+    struct _LIST_ENTRY UnitTableLink;// Offset=0x38 Size=0x10
+    struct _STOR_SCSI_ADDRESS Address;// Offset=0x48 Size=0x4
+    //...
+} RAID_UNIT_EXTENSION, *PRAID_UNIT_EXTENSION;
+#endif
+
+typedef struct _STOR_TIMER_CONTEXT// Size=0xa0
+{
+    struct _RAID_ADAPTER_EXTENSION *Adapter;// Offset=0x0 Size=0x8
+    struct _KTIMER Timer;// Offset=0x8 Size=0x40
+    struct _KDPC TimerDpc;// Offset=0x48 Size=0x40
+    void  ( *Callback)(void *,void *);// Offset=0x88 Size=0x8
+    void *CallbackContext;// Offset=0x90 Size=0x8
+    struct _IO_WORKITEM *FreeTimerWorkItem;// Offset=0x98 Size=0x8
+} STOR_TIMER_CONTEXT;
+
+#endif
+
+#if defined(STORPORT_W8) && defined(_X86_)
 ///////////////////////////////////////////////////////////////////
 //                       Win8+ storport                          //
 
@@ -456,7 +722,7 @@ typedef struct _PORT_CONFIGURATION_INFORMATION  // Size=0xd0
     enum _DMA_SPEED DmaSpeed;                                          // Offset=0x2c Size=0x4
     unsigned long AlignmentMask;                                       // Offset=0x30 Size=0x4
     unsigned long NumberOfAccessRanges;                                // Offset=0x34 Size=0x4
-    struct _ACCESS_RANGE *AccessRanges;                                // Offset=0x38 Size=0x4
+    ACCESS_RANGE (*AccessRanges)[];                                    // Offset=0x38 Size=0x4
     void *MiniportDumpData;                                            // Offset=0x3c Size=0x4
     unsigned char NumberOfBuses;                                       // Offset=0x40 Size=0x1
     char InitiatorBusId[8];                                            // Offset=0x41 Size=0x8
@@ -605,13 +871,6 @@ typedef struct _RAID_UNIT_EXTENSION          // Size=0x2a0
     //...
 } RAID_UNIT_EXTENSION, *PRAID_UNIT_EXTENSION;
 
-#endif
-//                       Win8+ storport                          //
-///////////////////////////////////////////////////////////////////
-
-
-
-
 typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
 {
     RAID_ADAPTER_EXTENSION *Adapter;               // Offset=0x0 Size=0x4
@@ -622,6 +881,10 @@ typedef struct _STOR_TIMER_CONTEXT                 // Size=0x60
     void                   *CallbackContext;       // Offset=0x54 Size=0x4
     IO_WORKITEM            *FreeTimerWorkItem;     // Offset=0x58 Size=0x4
 } STOR_TIMER_CONTEXT;
+
+#endif
+//                       Win8+ storport                          //
+///////////////////////////////////////////////////////////////////
 
 
 
@@ -726,7 +989,6 @@ ULONG
 /////////////////////////////////////////////////////////
 
 
-
 /////////////////////////////////////////////////////////
 //                Functions
 
@@ -771,17 +1033,16 @@ isDumpMode(PUNICODE_STRING RegistryPath)
 
 
 #define GETROUTINE(x)                                                   \
-           RtlInitAnsiString(&AnsiString, #x);                        \
-           g##x = MiFindExportedRoutineByName_k8(BaseAdress, &AnsiString);
+    RtlInitAnsiString(&AnsiString, #x);                                 \
+    g##x = MiFindExportedRoutineByName_k8(BaseAdress, &AnsiString);
 
-
-#define GETROUTINETYPE(x, y)                                                   \
-           RtlInitAnsiString(&AnsiString, #x);                        \
-           g##x = (y) MiFindExportedRoutineByName_k8(BaseAdress, &AnsiString);
+#define GETROUTINE_WITH_TYPE(x, y)                                      \
+    RtlInitAnsiString(&AnsiString, #x);                                 \
+    g##x = (y) MiFindExportedRoutineByName_k8(BaseAdress, &AnsiString);
 
 
 void
-StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath) 
+    StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath) 
 {
     ANSI_STRING     AnsiString;
     PVOID           BaseAdress;
@@ -805,7 +1066,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
         GETROUTINE(StorPortDebugPrint)
         GETROUTINE(StorPortDeviceBusy)
         GETROUTINE(StorPortDeviceReady)
-        GETROUTINETYPE(StorPortExtendedFunction, ULONG (__stdcall *)(STORPORT_FUNCTION_CODE,PVOID,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR))
+        GETROUTINE_WITH_TYPE(StorPortExtendedFunction, ULONG (*)(STORPORT_FUNCTION_CODE,PVOID,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR,ULONG_PTR))
         GETROUTINE(StorPortFreeDeviceBase)
         GETROUTINE(StorPortFreeRegistryBuffer)
         GETROUTINE(StorPortGetBusData)
@@ -817,7 +1078,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
         GETROUTINE(StorPortGetUncachedExtension)
         GETROUTINE(StorPortGetVirtualAddress)
         GETROUTINE(StorPortLogError)
-        GETROUTINETYPE(StorPortInitialize, ULONG (__stdcall *)(PVOID,PVOID,_HW_INITIALIZATION_DATA *,PVOID))
+        GETROUTINE_WITH_TYPE(StorPortInitialize, ULONG (*)(PVOID,PVOID,_HW_INITIALIZATION_DATA *,PVOID))
         GETROUTINE(StorPortMoveMemory)
         GETROUTINE(StorPortNotification)
         GETROUTINE(StorPortPause)
@@ -836,7 +1097,7 @@ StorportInit(PDEVICE_OBJECT DeviceObject, PUNICODE_STRING  RegistryPath)
         GETROUTINE(StorPortReadRegisterUlong)
         GETROUTINE(StorPortReadRegisterUshort)
         GETROUTINE(StorPortReady)
-        GETROUTINETYPE(StorPortRegistryRead, BOOLEAN (__stdcall *)(PVOID,PUCHAR,ULONG,ULONG,PUCHAR,PULONG))
+        GETROUTINE_WITH_TYPE(StorPortRegistryRead, BOOLEAN (*)(PVOID,PUCHAR,ULONG,ULONG,PUCHAR,PULONG))
         GETROUTINE(StorPortRegistryWrite)
         GETROUTINE(StorPortResume)
         GETROUTINE(StorPortResumeDevice)
@@ -871,7 +1132,7 @@ NTSTATUS NtStatusToStorStatus(NTSTATUS NTStatus)
         return STOR_STATUS_BUFFER_TOO_SMALL;
     if (NTStatus == STATUS_INVALID_PARAMETER)
         return STOR_STATUS_INVALID_PARAMETER;
-    if (NTStatus == STATUS_SUCCESS)
+    if (NTStatus >= STATUS_SUCCESS)
         return STOR_STATUS_SUCCESS;
 
     return STOR_STATUS_UNSUCCESSFUL; // default
@@ -1110,16 +1371,16 @@ RaidAdapterFindUnit (
 
         KeReleaseInStackQueuedSpinLock(&LockHandle);
         return result;
-    }
-    else
-        if (CurrentIrql >= Adapter->InterruptIrql )
+    } else {
+        if (CurrentIrql >= Adapter->InterruptIrql ) {
             return RaidAdapterFindUnitAtDirql(Adapter, Address);
-        else {
+        } else {
             OldIrql = RaidAdapterAcquireInterruptLock(Adapter);
             result = RaidAdapterFindUnitAtDirql(Adapter, Address);
             RaidAdapterReleaseInterruptLock(Adapter, OldIrql);
             return result;
         }
+    }
 }
 
 
@@ -1436,13 +1697,10 @@ ULONG __cdecl StorPortExtendedFunction_k8(
 ///////////////////////////////////////////////////////////////////////////////////////
     if (FunctionCode == ExtFunctionSetUnitAttributes) {
         /*
-        ULONG StorPortRequestTimer(
+        ULONG StorPortSetUnitAttributes(
             PVOID HwDeviceExtension,
-            PVOID TimerHandle,
-            PHW_TIMER_EX TimerCallback,
-            PVOID CallbackContext,
-            ULONGLONG TimerValue,
-            ULONGLONG TolerableDelay );
+            PSTOR_ADDRESS Address,
+            STOR_UNIT_ATTRIBUTES Attributes
         */
         return STOR_STATUS_SUCCESS;
     }
@@ -1557,7 +1815,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
                 *BytesReturned = 0;
 
         Adapter = GetAdapter(HwDeviceExtension);
-        if (Adapter == 0)
+        if (Adapter == NULL)
                 return STOR_STATUS_INVALID_PARAMETER;
 
         if (Address != NULL) {
@@ -1623,7 +1881,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
             PackedAddress.PathId   = Address->AddressData[0];
             PackedAddress.TargetId = Address->AddressData[1];
             PackedAddress.Lun      = Address->AddressData[2];
-            if (RaidAdapterFindUnit((RAID_ADAPTER_EXTENSION *) HwDeviceExtension, PackedAddress ) == NULL)
+            if (RaidAdapterFindUnit(Adapter, PackedAddress ) == NULL)
                 return STOR_STATUS_INVALID_PARAMETER;
             }
 
@@ -1695,7 +1953,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
         Adapter = GetAdapter(HwDeviceExtension);
 
         if (TimerValue == 0) {
-            if (TimerHandle ->Adapter != Adapter)
+            if (TimerHandle->Adapter != Adapter)
                 return STOR_STATUS_INVALID_PARAMETER;
 
             if (TimerHandle->Callback != TimerCallback)
@@ -1707,7 +1965,7 @@ ULONG __cdecl StorPortExtendedFunction_k8(
         }
 
         else {                                              // TimerValue > 0
-            if (InterlockedCompareExchangePointer((PVOID *)&TimerHandle->Callback, TimerCallback, 0))
+            if (InterlockedCompareExchangePointer((PVOID *)&TimerHandle->Callback, TimerCallback, NULL))
                     return STOR_STATUS_BUSY;
 
             TimerHandle->CallbackContext= CallbackContext;

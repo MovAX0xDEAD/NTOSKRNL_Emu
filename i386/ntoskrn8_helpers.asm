@@ -1,5 +1,4 @@
     .686P
-    .model  flat
 
 EXTRN   _Create_Process_Notify_Routine_XP@24:PROC
 

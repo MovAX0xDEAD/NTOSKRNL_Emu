@@ -16,6 +16,15 @@ TrampKeBugCheckEx(void)
 }
 
 
+typedef int (*PFNRT)();
+
+/** KiServiceLinkage  (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64). */
+extern PFNRT                               g_pfnKiServiceLinkage;
+
+/** KiServiceInternal (used to fake missing ZwQueryVirtualMemory on XP64 / W2K3-64) */
+extern PFNRT                               g_pfnKiServiceInternal;
+
+
 typedef BOOLEAN  (*PFN_BOOLEAN)(void);
 typedef BOOLEAN  (*PFN_BOOLEAN_PKTHREAD_KPROCESSOR_MODE)(PKTHREAD, KPROCESSOR_MODE);
 typedef BOOLEAN  (*PFN_BOOLEAN_KPROCESSOR_MODE)(KPROCESSOR_MODE);
@@ -40,11 +49,18 @@ PFN_NTSTATUS_PVOID_PPORT_MESSAGE_PPORT_MESSAGE      gTramp_LpcRequestWaitReplyPo
 (PFN_NTSTATUS_PVOID_PPORT_MESSAGE_PPORT_MESSAGE)    TrampKeBugCheckEx;
 
 
+/*
+Copyright (c) Microsoft Corporation. All rights reserved. 
+
+You may only use this code if you agree to the terms of the Windows Research Kernel Source Code License agreement (see License.txt).
+If you do not agree to the terms, do not use the code.
+*/
+
 
 BOOLEAN FASTCALL
 ExAcquireRundownProtectionEx_k8 (
-     __inout PEX_RUNDOWN_REF RunRef,
-     __in ULONG Count
+     PEX_RUNDOWN_REF RunRef,
+     ULONG Count
      )
 {
     ULONG_PTR Value, NewValue;
@@ -80,8 +96,8 @@ ExAcquireRundownProtectionEx_k8 (
 
 VOID FASTCALL
 ExReleaseRundownProtectionEx_k8 (
-     __inout PEX_RUNDOWN_REF RunRef,
-     __in ULONG Count
+    PEX_RUNDOWN_REF RunRef,
+    ULONG Count
      )
 {
     ULONG_PTR Value, NewValue;
@@ -150,8 +166,8 @@ ExReleaseRundownProtectionEx_k8 (
 
 PEX_RUNDOWN_REF_CACHE_AWARE
 ExAllocateCacheAwareRundownProtection_k8 (
-    __in POOL_TYPE PoolType,
-    __in ULONG PoolTag
+    POOL_TYPE PoolType,
+    ULONG PoolTag
     )
 {
     PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware;
@@ -283,8 +299,8 @@ ExSizeOfRundownProtectionCacheAware_k8 (
 
 VOID
 ExInitializeRundownProtectionCacheAware_k8 (
-    __out PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
-    __in SIZE_T RunRefSize
+    PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware,
+    SIZE_T RunRefSize
     )
 {
     PEX_RUNDOWN_REF CurrentRunRef;
@@ -336,7 +352,7 @@ ExInitializeRundownProtectionCacheAware_k8 (
 
 VOID
 ExFreeCacheAwareRundownProtection_k8 (
-    __inout PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
+    PEX_RUNDOWN_REF_CACHE_AWARE RunRefCacheAware
     )
 {
     ExFreePool (RunRefCacheAware->PoolToFree);
@@ -536,7 +552,7 @@ ExEnterCriticalRegionAndAcquireResourceExclusive_k8 (
 {
     KeEnterCriticalRegion();
     ExAcquireResourceExclusiveLite(Resource, TRUE);
-    return _PsGetCurrentThread()->Tcb.Win32Thread;
+    return (PVOID) _PsGetCurrentThread()->Tcb.Win32Thread;
 }
 
 
@@ -546,7 +562,7 @@ ExEnterCriticalRegionAndAcquireResourceShared_k8 (
 {
     KeEnterCriticalRegion();
     ExAcquireResourceSharedLite(Resource, TRUE);
-    return _PsGetCurrentThread()->Tcb.Win32Thread;
+    return (PVOID) _PsGetCurrentThread()->Tcb.Win32Thread;
 }
 
 
@@ -957,10 +973,15 @@ PsGetCurrentThreadProcessId_k8 ( VOID )
 
 
 BOOLEAN
-KeAreAllApcsDisabled_k8 (VOID)      // XP x32 Only
+KeAreAllApcsDisabled_k8 (VOID)
 {   
+#if (NTDDI_VERSION < NTDDI_WS03)    // XP Only
     return (BOOLEAN)((KeGetCurrentThread()->KernelApcDisable != 0) ||
                      (KeGetCurrentIrql() >= APC_LEVEL));
+#else
+    return (BOOLEAN)((KeGetCurrentThread()->SpecialApcDisable != 0) ||
+                     (KeGetCurrentIrql() >= APC_LEVEL));
+#endif
 }
 
 
@@ -991,10 +1012,8 @@ ExReleaseFastMutexUnsafeAndLeaveCriticalRegion_k8 (
     PFAST_MUTEX FastMutex
     )
 {
-
     ExReleaseFastMutexUnsafe(FastMutex);
     KeLeaveCriticalRegion();
-    return;
 }
 
 
@@ -1085,7 +1104,11 @@ PsGetCurrentThreadProcess_k8 (
     VOID
     )
 {
-    return THREAD_TO_PROCESS(PsGetCurrentThread());
+    #if (NTDDI_VERSION < NTDDI_VISTA)
+        return THREAD_TO_PROCESS(PsGetCurrentThread());
+    #else
+        return (PEPROCESS) ((_KTHREAD *)PsGetCurrentThread())->Process;
+    #endif
 }
 
 
@@ -1097,7 +1120,7 @@ PsGetCurrentThreadWin32ThreadAndEnterCriticalRegion_k8 (
     PETHREAD Thread = PsGetCurrentThread();
     *ProcessId = Thread->Cid.UniqueProcess;
     KeEnterCriticalRegionThread(&Thread->Tcb);
-    return Thread->Tcb.Win32Thread;
+    return (PVOID) Thread->Tcb.Win32Thread;
 }
 
 
@@ -1147,12 +1170,30 @@ ObDeleteCapturedInsertInfo_k8 (
 }
 
 
+VOID FORCEINLINE
+ExReleasePushLockShared (
+     IN PEX_PUSH_LOCK PushLock
+     )
+{
+    EX_PUSH_LOCK OldValue, NewValue;
+
+    OldValue = *PushLock;
+    OldValue.Value &= ~EX_PUSH_LOCK_WAITING;
+    NewValue.Value = OldValue.Value - EX_PUSH_LOCK_SHARE_INC;
+    if (InterlockedCompareExchangePointer (&PushLock->Ptr,
+                                           NewValue.Ptr,
+                                           OldValue.Ptr) != OldValue.Ptr) {
+        ExfReleasePushLock (PushLock);
+    }
+}
+
+
 VOID FASTCALL
 ExfReleasePushLockShared_k8 (
     PEX_PUSH_LOCK PushLock
      )
 {
-    ExfReleasePushLock(PushLock);
+    ExReleasePushLockShared(PushLock);
 }
 
 
@@ -1238,8 +1279,9 @@ KeEnterGuardedRegion_k8 (void)
     
     if (gGuardedRegionCounter < 1 &&
         KeGetCurrentIrql() < gGuardedRegion_OldIrql &&
-        KeGetCurrentIrql() < APC_LEVEL)
+        KeGetCurrentIrql() < APC_LEVEL) {
             KeRaiseIrql(APC_LEVEL, &gGuardedRegion_OldIrql);
+    }
     
     InterlockedIncrement(&gGuardedRegionCounter);
 }
@@ -1250,11 +1292,13 @@ KeLeaveGuardedRegion_k8 (void)
 {
     InterlockedDecrement(&gGuardedRegionCounter);
     
-    if (gGuardedRegionCounter < 1)
+    if (gGuardedRegionCounter < 1) {
         KeLowerIrql(gGuardedRegion_OldIrql);
+    }
 
-    if (gGuardedRegionCounter < 0)
-        InterlockedExchange(&gGuardedRegionCounter, 0);    
+    if (gGuardedRegionCounter < 0) {
+        InterlockedExchange(&gGuardedRegionCounter, 0);
+    }
     
     KeLeaveCriticalRegion();
 }
@@ -1514,24 +1558,6 @@ KiAcquireQueuedLock_k8 (
         // This processor now owns this lock.
         //
 
-#if defined(QLOCK_STAT_CLEAN)
-
-        ULONG LockNumber;
-
-        LockNumber = QueuedLock - KeGetCurrentPrcb()->LockQueue;
-
-        //
-        // The following check allows the conversion from QueuedLock to
-        // lock number to work (validly) even if in stack queued spin
-        // locks are using this routine.
-        //
-
-        if (LockNumber < QLOCKS_NUMBER) {
-            KiQueuedSpinLockHouse[LockNumber].Clean = 1;
-        }
-        
-#endif
-
         *LockPointer |= LOCK_QUEUE_OWNER;
 
     } else {
@@ -1652,22 +1678,22 @@ memcmpHexSearch(const unsigned char *s1, const unsigned char *s2, size_t n, cons
 
 
 char*
-MemHexSearch(const unsigned char *s, size_t module_size, const unsigned char *find, size_t pattern_size, const unsigned char* patternmask)
+MemHexSearch(const unsigned char *s, size_t module_size, const unsigned char *pattern, size_t pattern_size, const unsigned char* patternmask)
 {
-  unsigned char first_c = find[0];
+  unsigned char first_c = pattern[0];
   size_t i = 0;
 
   do {
     if (i) { i++; }; // increment if i > 0
 
-    while (s[i] != first_c && i < module_size)
+    while (i < module_size && s[i] != first_c )
     {
      i++;
     }
   }
-  while (memcmpHexSearch(&s[i], find, pattern_size, patternmask) != 0 && i < module_size );
+  while ((i + pattern_size) < module_size && memcmpHexSearch(&s[i], pattern, pattern_size, patternmask) != 0);
 
-  if (i >= module_size)
+  if ((i + pattern_size) >= module_size)
       return NULL;
   else
       return (char *) &s[i];
@@ -1733,26 +1759,33 @@ const unsigned char KeInvalidateAllCaches_magic4mask[] =
 
 // XP* MP:
 // 55 8B EC 83 EC 0C 53 56 8B 75 08 8D 8E E8 00 00 00 8D 55 F4 FF 15 xx xx xx xx 64 A1 20 00 00 00 8D 88 18 04 00 00
+// 55 8B EC 83 EC 0C 53 56 8B 75 08 80 3E 06 74 16 6A 00 chk builds
 
 // XP* UP:
 // 55 8B EC 83 EC 0C 53 56 8B 75 08 8D 8E E8 00 00 00 8D 55 F4 FF 15 xx xx xx xx 8A 4D 0C 0F BE C1 8D 44 30 2E
+// 55 8B EC 83 EC 0C 53 56 8B 75 08 80 3E 06 74 16 6A 00 chk builds
 
 // 2003 SP2 MP:
 // 55 8B EC 83 EC 0C 53 56 8B 75 08 57 8D 4E 44 8D 55 F4 FF 15 xx xx xx xx 64 8B 0D 20 00 00 00 BF 18 04 00 00
+// 55 8B EC 83 EC 0C 53 56 8B 75 08 80 3E 06 57 74 16 6A 00 chk builds
 
 // 2003 SP2 UP:
 // 55 8B EC 83 EC 0C 53 56 8B 75 08 8D 4E 44 8D 55 F4 FF 15 xx xx xx xx 8A 4D 0C 0F BE C1 8D 44 30 5E
+// 55 8B EC 83 EC 0C 53 56 8B 75 08 80 3E 06 57 74 16 6A 00 chk builds
 #if (NTDDI_VERSION >= NTDDI_WINXP) && (NTDDI_VERSION <= NTDDI_WINXPSP4)
 
 const unsigned char KeAlertThread_magic1[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x8B, 0x75, 0x08, 0x8D, 0x8E, 0xE8, 0x00, 0x00, 0x00, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x64, 0xA1, 0x20, 0x00, 0x00, 0x00, 0x8D, 0x88, 0x18, 0x04, 0x00, 0x00};
-
 const unsigned char KeAlertThread_magic1mask[] =
 {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
+const unsigned char KeAlertThread_magic1chk[]     =
+{0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x8B, 0x75, 0x08, 0x80, 0x3E, 0x06, 0x74, 0x16, 0x6A, 0x00};
+const unsigned char KeAlertThread_magic1chkmask[] =
+{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
 const unsigned char KeAlertThread_magic2[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x8B, 0x75, 0x08, 0x8D, 0x8E, 0xE8, 0x00, 0x00, 0x00, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x8A, 0x4D, 0x0C, 0x0F, 0xBE, 0xC1, 0x8D, 0x44, 0x30, 0x2E};
-
 const unsigned char KeAlertThread_magic2mask[] =
 {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
@@ -1764,6 +1797,11 @@ const unsigned char KeAlertThread_magic1[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x8B, 0x75, 0x08, 0x57, 0x8D, 0x4E, 0x44, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x64, 0x8B, 0x0D, 0x20, 0x00, 0x00, 0x00, 0xBF, 0x18, 0x04, 0x00, 0x00};
 const unsigned char KeAlertThread_magic1mask[] =
 {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
+const unsigned char KeAlertThread_magic1chk[]     =
+{0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x8B, 0x75, 0x08, 0x80, 0x3E, 0x06, 0x57, 0x74, 0x16, 0x6A, 0x00};
+const unsigned char KeAlertThread_magic1chkmask[] =
+{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 const unsigned char KeAlertThread_magic2[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x8B, 0x75, 0x08, 0x8D, 0x4E, 0x44, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x8A, 0x4D, 0x0C, 0x0F, 0xBE, 0xC1, 0x8D, 0x44, 0x30, 0x5E};
@@ -1778,18 +1816,26 @@ const unsigned char KeAlertThread_magic2mask[] =
 //  KeTestAlertThread
 // XP* MP:
 // 55 8B EC 83 EC 0C 53 56 64 A1 24 01 00 00 8B F0 8D 8E E8 00 00 00 8D 55 F4 FF 15 xx xx xx xx 64 A1 20 00 00 00 8D 88 18 04 00 00
+// 55 8B EC 83 EC 0C FF 15 xx xx xx xx 3C 02 76 16 6A 00 chk builds
 
 // XP* UP:
 // 55 8B EC 83 EC 0C 53 56 64 A1 24 01 00 00 8B F0 8D 8E E8 00 00 00 8D 55 F4 FF 15 xx xx xx xx 0F BE 45 08 8D 44 30 2E
+// 55 8B EC 83 EC 0C FF 15 xx xx xx xx 3C 02 76 16 6A 00 chk builds
 
 // 2003 SP2 *:
 // 55 8B EC 83 EC 0C 53 56 64 8B 35 24 01 00 00 8D 4E 44 8D 55 F4 FF 15 xx xx xx xx 0F BE 45 08 8D 44 30 5E
+// 55 8B EC 83 EC 0C FF 15 xx xx xx xx 3C 02 76 16 6A 00 chk builds
 #if (NTDDI_VERSION >= NTDDI_WINXP) && (NTDDI_VERSION <= NTDDI_WINXPSP4)
 
 const unsigned char KeTestAlertThread_magic1[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x64, 0xA1, 0x24, 0x01, 0x00, 0x00, 0x8B, 0xF0, 0x8D, 0x8E, 0xE8, 0x00, 0x00, 0x00, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x64, 0xA1, 0x20, 0x00, 0x00, 0x00, 0x8D, 0x88, 0x18, 0x04, 0x00, 0x00};
 const unsigned char KeTestAlertThread_magic1mask[] =
 {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
+const unsigned char KeTestAlertThread_magic1chk[]     =
+{0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x3C, 0x02, 0x76, 0x16, 0x6A, 0x00};
+const unsigned char KeTestAlertThread_magic1chkmask[] =
+{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 const unsigned char KeTestAlertThread_magic2[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x64, 0xA1, 0x24, 0x01, 0x00, 0x00, 0x8B, 0xF0, 0x8D, 0x8E, 0xE8, 0x00, 0x00, 0x00, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x0F, 0xBE, 0x45, 0x08, 0x8D, 0x44, 0x30, 0x2E};
@@ -1804,6 +1850,11 @@ const unsigned char KeTestAlertThread_magic1[]     =
 {0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0x53, 0x56, 0x64, 0x8B, 0x35, 0x24, 0x01, 0x00, 0x00, 0x8D, 0x4E, 0x44, 0x8D, 0x55, 0xF4, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x0F, 0xBE, 0x45, 0x08, 0x8D, 0x44, 0x30, 0x5E};
 const unsigned char KeTestAlertThread_magic1mask[] =
 {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+
+const unsigned char KeTestAlertThread_magic1chk[]     =
+{0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x0C, 0xFF, 0x15, 0x11, 0x22, 0x33, 0x44, 0x3C, 0x02, 0x76, 0x16, 0x6A, 0x00};
+const unsigned char KeTestAlertThread_magic1chkmask[] =
+{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 const unsigned char* KeTestAlertThread_magic2     = KeTestAlertThread_magic1;
 const unsigned char* KeTestAlertThread_magic2mask = KeTestAlertThread_magic1mask;
@@ -1876,7 +1927,9 @@ gTramp_KeAlertThread = (PFN_BOOLEAN_PKTHREAD_KPROCESSOR_MODE) ModuleHexSearch(MO
 if (!gTramp_KeAlertThread)
     gTramp_KeAlertThread = (PFN_BOOLEAN_PKTHREAD_KPROCESSOR_MODE) ModuleHexSearch(MODULE_NTOSKRNL, KeAlertThread_magic2, sizeof(KeAlertThread_magic2), KeAlertThread_magic2mask);
     if (!gTramp_KeAlertThread)
-        KeBugCheckEx(0xDEADBEEFL, 5, 0, 0, 3);
+        gTramp_KeAlertThread = (PFN_BOOLEAN_PKTHREAD_KPROCESSOR_MODE) ModuleHexSearch(MODULE_NTOSKRNL, KeAlertThread_magic1chk, sizeof(KeAlertThread_magic1chk), KeAlertThread_magic1chkmask);
+        if (!gTramp_KeAlertThread)
+            KeBugCheckEx(0xDEADBEEFL, 5, 0, 0, 3);
 //////////////////////////////////////////////////////
 
 
@@ -1886,17 +1939,9 @@ gTramp_KeTestAlertThread = (PFN_BOOLEAN_KPROCESSOR_MODE) ModuleHexSearch(MODULE_
 if (!gTramp_KeTestAlertThread)
     gTramp_KeTestAlertThread = (PFN_BOOLEAN_KPROCESSOR_MODE) ModuleHexSearch(MODULE_NTOSKRNL, KeTestAlertThread_magic2, sizeof(KeTestAlertThread_magic2), KeTestAlertThread_magic2mask);
     if (!gTramp_KeTestAlertThread)
-        KeBugCheckEx(0xDEADBEEFL, 5, 0, 0, 4);
-//////////////////////////////////////////////////////
-
-
-//////////////////////////////////////////////////////   
-//  KeTestAlertThread
-gTramp_KeTestAlertThread = (PFN_BOOLEAN_KPROCESSOR_MODE) ModuleHexSearch(MODULE_NTOSKRNL, KeTestAlertThread_magic1, sizeof(KeTestAlertThread_magic1), KeTestAlertThread_magic1mask);
-if (!gTramp_KeTestAlertThread)
-    gTramp_KeTestAlertThread = (PFN_BOOLEAN_KPROCESSOR_MODE) ModuleHexSearch(MODULE_NTOSKRNL, KeTestAlertThread_magic2, sizeof(KeTestAlertThread_magic2), KeTestAlertThread_magic2mask);
-    if (!gTramp_KeTestAlertThread)
-        KeBugCheckEx(0xDEADBEEFL, 5, 0, 0, 4);
+        gTramp_KeTestAlertThread = (PFN_BOOLEAN_KPROCESSOR_MODE) ModuleHexSearch(MODULE_NTOSKRNL, KeTestAlertThread_magic1chk, sizeof(KeTestAlertThread_magic1chk), KeTestAlertThread_magic1chkmask);
+        if (!gTramp_KeTestAlertThread)
+            KeBugCheckEx(0xDEADBEEFL, 5, 0, 0, 4);
 //////////////////////////////////////////////////////
 
 
@@ -1911,6 +1956,114 @@ if (!gTramp_LpcRequestWaitReplyPortEx)
 
 
 #endif //  < Vista && x32
+}
+
+
+
+typedef NTSTATUS
+(*PFNNTQUERYVIRTUALMEMORY) (
+    HANDLE,
+    void const *,
+    MEMORY_INFORMATION_CLASS,
+    PVOID,
+    SIZE_T,
+    PSIZE_T);
+
+
+#ifdef __cplusplus
+# define DECLASM(type)           extern "C" type __cdecl
+#else
+# define DECLASM(type)           type __cdecl
+#endif
+
+#if defined(_X86_)
+DECLASM(void) NtQueryVirtualMemory_0xB2(void);
+DECLASM(void) NtQueryVirtualMemory_0xBA(void);
+
+#else // x64
+DECLASM(void) NtQueryVirtualMemory_0x1F(void);
+DECLASM(void) NtQueryVirtualMemory_0x20(void);
+NTSYSAPI NTSTATUS NTAPI ZwRequestWaitReplyPort(HANDLE, PVOID, PVOID);
+#endif
+
+NTSTATUS
+ZwQueryVirtualMemory_k8 (   // taken from virtualbox
+    HANDLE  Handle,
+    void const * Ptr,
+    MEMORY_INFORMATION_CLASS Class,
+    PVOID Ptr2,
+    SIZE_T Size,
+    PSIZE_T Size2)
+{    
+    PFNNTQUERYVIRTUALMEMORY JumpAddr;
+
+#if defined(_X86_)
+    uint8_t const *pbCode  = (uint8_t const *)(uintptr_t)ZwQueryVolumeInformationFile;
+        
+    if (*pbCode == 0xb8) /* mov eax, dword */
+     switch (*(uint32_t const *)&pbCode[1]) {
+        case 0xb3: JumpAddr= (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0xB2; break; /* XP SP1/2/3 */
+        case 0xbb: JumpAddr= (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0xBA; break; /* W2K3 R2 SP2 */
+     }
+#else // x64
+     uint8_t const *pbCode = (uint8_t const *)(uintptr_t)ZwRequestWaitReplyPort;
+     if (  pbCode[ 0] == 0x48   /* mov rax, rsp */
+        && pbCode[ 1] == 0x8b
+        && pbCode[ 2] == 0xc4
+        && pbCode[ 3] == 0xfa   /* cli */
+        && pbCode[ 4] == 0x48   /* sub rsp, 10h */
+        && pbCode[ 5] == 0x83
+        && pbCode[ 6] == 0xec
+        && pbCode[ 7] == 0x10
+        && pbCode[ 8] == 0x50   /* push rax */
+        && pbCode[ 9] == 0x9c   /* pushfq */
+        && pbCode[10] == 0x6a   /* push 10 */
+        && pbCode[11] == 0x10
+        && pbCode[12] == 0x48   /* lea rax, [nt!KiServiceLinkage] */
+        && pbCode[13] == 0x8d
+        && pbCode[14] == 0x05
+        && pbCode[19] == 0x50   /* push rax */
+        && pbCode[20] == 0xb8   /* mov eax,1fh <- the syscall no. */
+        /*&& pbCode[21] == 0x1f*/
+        && pbCode[22] == 0x00
+        && pbCode[23] == 0x00
+        && pbCode[24] == 0x00
+        && pbCode[25] == 0xe9   /* jmp KiServiceInternal */ )
+     {
+        uint8_t const *pbKiServiceInternal = &pbCode[30] + *(int32_t const *)&pbCode[26];
+        uint8_t const *pbKiServiceLinkage  = &pbCode[19] + *(int32_t const *)&pbCode[15];
+        if (*pbKiServiceLinkage == 0xc3)
+        {
+            g_pfnKiServiceInternal = (PFNRT)pbKiServiceInternal;
+            g_pfnKiServiceLinkage  = (PFNRT)pbKiServiceLinkage;
+            switch (pbCode[21])
+            {
+                case 0x1e: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x1F; break;
+                case 0x1f: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x20; break;
+                //case 0x20: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x21; break;
+                //case 0x21: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x22; break;
+                //case 0x22: JumpAddr = (PFNNTQUERYVIRTUALMEMORY)NtQueryVirtualMemory_0x23; break;
+            }
+        }
+        }
+# endif
+
+    return JumpAddr(
+        Handle,
+        Ptr,
+        Class,
+        Ptr2,
+        Size,
+        Size2);
+}
+
+
+VOID NTAPI
+KeInitializeSpinLock_k8 (
+    IN PKSPIN_LOCK SpinLock
+    )
+{
+    KeInitializeSpinLock(SpinLock); // wdm.h for x64
 }
 
 
