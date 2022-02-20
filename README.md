@@ -105,7 +105,13 @@ Storport was released since Windows 2003, but possible to backport Windows 7 ver
 
    x64 - replace hex pattern **8B 83 C0 01 00 00** to **B8 00 00 00 00 90** (mov eax, [rbx+1C0h] -> mov eax, 0)
 
-4) Recalc checksum
+4) Windows 7 storport does not report SMART data when using STORAHCI, need to patch RaUnitScsiMiniportIoctl in storport.sys to enable SMART reporting:
+
+   x32 - replace hex pattern **75 36 8B 45 0C 81 78 10 00 06 1B 00 75 2A** to **90 90 8B 45 0C 81 78 10 00 06 1B 00 90 90**
+
+   x64 - replace hex pattern **75 36 81 7F 10 00 06 1B 00 75 2D** to **90 90 81 7F 10 00 06 1B 00 90 90**
+
+5) Recalc checksum
 
 
 ## Windows 7's NVMe driver for Windows XP ##
@@ -137,7 +143,13 @@ from Vista Beta/Longhorn 5456.5:
 4) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**
 5) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
 6) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
-7) Recalc checksum
+7) Windows 8 USB3 driver always report USB2 speed on inserted USB3 devices, need to patch usbhub3.sys for proper speed reporting:
+
+   x32 - replace hex pattern **83 7E 54 03 75 09** to **83 7E 54 03 EB 09**
+
+   x64 - replace hex pattern **00 00 00 03 75 0A** to **00 00 00 03 EB 0A**
+
+8) Recalc checksum
 
 
 ## Windows 8's STORAHCI driver for Windows XP ##
