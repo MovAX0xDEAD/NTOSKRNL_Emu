@@ -140,10 +140,11 @@ from Vista Beta/Longhorn 5456.5:
 
 2) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, wpprecorder.sys, usbd.sys change **security_cookie** to random value
 3) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, ksecdd.sys replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
-4) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**
-5) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
-6) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
-7) Windows 8 USB3 driver always report USB2 speed on inserted USB3 devices, need to patch usbhub3.sys for proper speed reporting:
+4) For x64 usbd.sys replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
+5) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**
+6) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
+7) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
+8) Windows 8 USB3 driver always report USB2 speed on inserted USB3 devices, need to patch usbhub3.sys for proper speed reporting:
 
    x32 - replace hex pattern **83 7E 54 03 75 09** to **83 7E 54 03 EB 09**
 
