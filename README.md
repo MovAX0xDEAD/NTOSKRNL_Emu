@@ -243,3 +243,21 @@ These drivers require storport.sys from Windows 7, use backported one
 1) In file iaStorA.sys/iaStorAC.sys/iaStorAVC.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section (do not change second string "**NTOSKRNL.exe**")
 
 2) Recalc checksum
+
+
+## AMD SATA AHCI Driver 1.2.1.402 for Windows XP##
+
+This driver requires storport.sys from Windows 7, use backported one 
+
+1) In file amd_xata.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
+
+2) Recalc checksum
+
+
+## Samsung NVMe Driver 3.3.0.2003 for Windows XP##
+
+This driver requires storport.sys from Windows 7, use backported one 
+
+1) In file secnvme.sys/secnvmeF.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
+
+2) Recalc checksum
