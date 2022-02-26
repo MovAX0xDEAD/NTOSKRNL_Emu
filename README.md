@@ -245,7 +245,7 @@ These drivers require storport.sys from Windows 7, use backported one
 2) Recalc checksum
 
 
-## AMD SATA AHCI Driver 1.2.1.402 for Windows XP##
+## AMD SATA AHCI Driver 1.2.1.402 for Windows XP ##
 
 This driver requires storport.sys from Windows 7, use backported one 
 
@@ -254,7 +254,7 @@ This driver requires storport.sys from Windows 7, use backported one
 2) Recalc checksum
 
 
-## Samsung NVMe Driver 3.3.0.2003 for Windows XP##
+## Samsung NVMe Driver 3.3.0.2003 for Windows XP ##
 
 This driver requires storport.sys from Windows 7, use backported one 
 
