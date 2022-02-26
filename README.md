@@ -46,7 +46,7 @@ to:
 
 
 # STORPORT Windows 7 Emu\_Extender #
-This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.23403 to emulate Windows 8' STORPORT.SYS
+This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.xxxxx to emulate Windows 8' STORPORT.SYS
 
 **How-To:**
 1) Compile ntoskrnl Emu\_Extender
@@ -93,9 +93,9 @@ If need coexist with original WDF1.9 drivers:
 ## Windows 7's Storport.sys for Windows XP/2003 ##
 
 Storport was released since Windows 2003, but possible to backport Windows 7 version:
-1) Get files from Windows 7 Updates (KB3125574):
+1) Get files from Windows 7 Updates (KB5010404):
 
-       storport.sys	v6.1.7601.23403
+       storport.sys	v6.1.7601.25735
 
 2) In storport.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 
@@ -155,7 +155,7 @@ from Vista Beta/Longhorn 5456.5:
 
 ## Windows 8's STORAHCI driver for Windows XP ##
 
-STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys v6.1.7601.23403 from Windows 7
+STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys v6.1.7601.xxxxx from Windows 7
 Storport.sys from Windows 7 more compatible with Windows XP/2003 because it still call required *PoStartNextPowerIrp* when processing power IRPs. Microsoft removed calls to PoStartNextPowerIrp in Windows 8's storport.sys, without this call Windows XP/2003 kernel cannot finish current power IRP and start next IRP => it generate BSOD (0x0000009F).
 Also storport.sys from Windows 7 has compatibility mode to allow old XP/2003 kernels write crashdumps through storport based disk drivers. In storport.sys from Windows 8 compatibility mode was removed, writing crashdumps possible only with new kernels.
 
@@ -164,9 +164,9 @@ Take attention:
 Windows 8's STORAHCI + Windows 7's STORPORT may have **significal performance drop and high CPU usage**, there is no fix yet
 
 
-1) Get files from Windows 8 (RTM ISO):
+1) Get files from Windows 8 Updates (KB5006739):
 
-       storahci.sys	v6.2.9200.16384
+       storahci.sys	v6.2.9200.20652
 
 2) In storahci.sys replace string "**storport.sys**" to "**storpor8.sys**" in import section
 
@@ -194,12 +194,12 @@ If you want compile storahci from sources (from Windows 8 DDK Samples), comment 
 
 ## Windows 7's MSAHCI driver for Windows XP ##
 
-1) Get files from Windows 7 Updates (KB3125574):
+1) Get files from Windows 7 Updates (KB5010404):
 
-       atapi.sys	v6.1.7601.23403
-       ataport.sys	v6.1.7601.23403
-       msahci.sys	v6.1.7601.23403
-       pciidex.sys	v6.1.7601.23403
+       atapi.sys	v6.1.7601.25735
+       ataport.sys	v6.1.7601.25735
+       msahci.sys	v6.1.7601.25735
+       pciidex.sys	v6.1.7601.25735
 
 2) In ataport.sys, pciidex.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 
@@ -213,7 +213,7 @@ If you want compile storahci from sources (from Windows 8 DDK Samples), comment 
 ```
 * x64: replace hex patterns: 
 1) **FF 50 78** to **EB 2A 90**
-2) offset +2Ch: **CC CC CC CC CC CC CC CC** to **FF 90 80 00 00 00 EB CF**, same in asm code:
+2) offset +2Ch: **CC CC CC CC CC CC CC CC 48 89 6C** to **FF 90 80 00 00 00 EB CF 48 89 6C**, same in asm code:
 ```
        mov     rax, cs:HalDispatchTable
        ...
