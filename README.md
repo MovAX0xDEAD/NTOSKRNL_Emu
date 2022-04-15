@@ -57,7 +57,7 @@ This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.xxxxx
 
 # Ported drivers: #
 
-## Windows 7's WDF 1.11 for Windows XP/2003##
+## Windows 7's WDF 1.11 for Windows XP/2003 ##
 
 Last version for Windows XP/2003 is 1.9, but possible to backport 1.11 version:
 1) Get files from Windows 7 Updates (KB3125574):
@@ -151,6 +151,17 @@ from Vista Beta/Longhorn 5456.5:
    x64 - replace hex pattern **00 00 00 03 75 0A** to **00 00 00 03 EB 0A**
 
 8) Recalc checksum
+
+
+## Windows 8's UASP (USB Attached SCSI) driver for Windows XP ##
+
+1) Get required files from Windows 8 (RTM ISO):
+
+       uaspstor.sys      v6.2.9200.16384
+
+2) In uaspstor.sys change **security_cookie** to random value
+3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**storpor8.sys**","**usbd.sys**" to "**usbd\_w8.sys**"   in import section
+4) Recalc checksum
 
 
 ## Windows 8's STORAHCI driver for Windows XP ##
