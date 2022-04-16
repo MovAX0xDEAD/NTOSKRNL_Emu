@@ -154,6 +154,7 @@ from Vista Beta/Longhorn 5456.5:
 
 
 ## Windows 8's UASP (USB Attached SCSI) driver for Windows XP ##
+Note that some motherboards may have a deadlock issue when trying to reboot with the UAS device connected.  Windows will turn off but not finish the reboot cycle.  If you Safe Remove the UAS device reboot will finish normally.  There is the option of using the deadlock patched version of the driver that fixes the issue.
 
 1) Get required files from Windows 8 (RTM ISO):
 
@@ -162,6 +163,23 @@ from Vista Beta/Longhorn 5456.5:
 2) In uaspstor.sys change **security_cookie** to random value
 3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**storpor8.sys**","**usbd.sys**" to "**usbd\_w8.sys**"   in import section
 4) Recalc checksum
+
+Deadlock patched UASP (CAUTION: Same as with a USB flash drive, rebooting while writing data will corrupt your data)
+
+2) In uaspstor.sys change **security_cookie** to random value
+3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**stor_ua8.sys**","**usbd.sys**" to "**usbd\_w8.sys**"   in import section
+4) Create a copy of "**storport.sys**" and rename to "**stor_uas.sys**", create a copy of "**storpor8.sys**" and rename to "**stor_ua8.sys**"
+5) In stor_ua8.sys replace string "**storport.sys**" to "**stor_uas.sys**"
+6) In stor_uas.sys patch RaidAdapterSetSystemPowerCompletion to fix deadlock.  Only the UASP driver will use this patched storport.
+
+   x32 - replace hex pattern **75 0B 85 FF** to **EB 0B 85 FF**
+
+   x64 - replace hex pattern **75 0C 41 3B FE** to **EB 0C 41 3B FE**
+   
+7) In stor_uas.sys replace unicode string "\ D e v i c e \ R a i d P o r t" to something else like "\ D e v i c e \ U a s p P o r t"		
+
+8) Recalc checksum
+
 
 
 ## Windows 8's STORAHCI driver for Windows XP ##
