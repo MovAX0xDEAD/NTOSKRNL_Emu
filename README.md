@@ -154,6 +154,8 @@ from Vista Beta/Longhorn 5456.5:
 
 
 ## Windows 8's UASP (USB Attached SCSI) driver for Windows XP ##
+Needs files from Windows 8 USB3 driver (usbd_w8.sys and wpprecorder.sys).
+
 Note that some motherboards may have a deadlock issue when trying to reboot with the UAS device connected.  Windows will turn off but not finish the reboot cycle.  If you Safe Remove the UAS device reboot will finish normally.  There is the option of using the deadlock patched version of the driver that fixes the issue.
 
 1) Get required files from Windows 8 (RTM ISO):
