@@ -141,20 +141,21 @@ from Vista Beta/Longhorn 5456.5:
 2) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, wpprecorder.sys, usbd.sys change **security_cookie** to random value
 3) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, ksecdd.sys replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 4) For x64 usbd.sys, replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
-5) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**
-6) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
-7) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
-8) Windows 8 USB3 driver always report USB2 speed on inserted USB3 devices, need to patch usbhub3.sys for proper speed reporting:
+5) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**, wpprecorder.sys->**wpprecor.sys**
+6) In files ucx01000.sys, usbhub3.sys, usbxhci.sys replace string name "**WppRecorder.sys**" to "**WppRecor.sys**" in import section
+7) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
+8) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
+9) Windows 8 USB3 driver always report USB2 speed on inserted USB3 devices, need to patch usbhub3.sys for proper speed reporting:
 
    x32 - replace hex pattern **83 7E 54 03 75 09** to **83 7E 54 03 EB 09**
 
    x64 - replace hex pattern **00 00 00 03 75 0A** to **00 00 00 03 EB 0A**
 
-8) Recalc checksum
+10) Recalc checksum
 
 
 ## Windows 8's UASP (USB Attached SCSI) driver for Windows XP ##
-Needs files from Windows 8 USB3 driver (usbd_w8.sys and wpprecorder.sys).
+Needs files from Windows 8 USB3 driver (usbd_w8.sys and wpprecor.sys).
 
 Note that some motherboards may have a deadlock issue when trying to reboot with the UAS device connected.  Windows will turn off but not finish the reboot cycle.  If you Safe Remove the UAS device reboot will finish normally.  There is the option of using the deadlock patched version of the driver that fixes the issue.
 
@@ -163,13 +164,13 @@ Note that some motherboards may have a deadlock issue when trying to reboot with
        uaspstor.sys      v6.2.9200.16384
 
 2) In uaspstor.sys change **security_cookie** to random value
-3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**storpor8.sys**","**usbd.sys**" to "**usbd\_w8.sys**"   in import section
+3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**storpor8.sys**","**usbd.sys**" to "**usbd\_w8.sys**", "**WppRecorder.sys**" to "**WppRecor.sys**"   in import section
 4) Recalc checksum
 
 Deadlock patched UASP (CAUTION: Same as with a USB flash drive, rebooting while writing data will corrupt your data)
 
 2) In uaspstor.sys change **security_cookie** to random value
-3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**stor_ua8.sys**","**usbd.sys**" to "**usbd\_w8.sys**"   in import section
+3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**stor_ua8.sys**","**usbd.sys**" to "**usbd\_w8.sys**", "**WppRecorder.sys**" to "**WppRecor.sys**"  in import section
 4) Create a copy of "**storport.sys**" and rename to "**stor_uas.sys**", create a copy of "**storpor8.sys**" and rename to "**stor_ua8.sys**"
 5) In stor_ua8.sys replace string "**storport.sys**" to "**stor_uas.sys**"
 6) In stor_uas.sys patch RaidAdapterSetSystemPowerCompletion to fix deadlock.  Only the UASP driver will use this patched storport.
