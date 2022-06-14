@@ -164,6 +164,8 @@ KeFlushQueuedDpcs_k8 (void)    // WinXP RTM, SP1
 }
 
 
+
+
 NTSTATUS
 RtlQueryRegistryValuesEx_k8 (
     ULONG                       RelativeTo,
@@ -2478,6 +2480,35 @@ SeQueryInformationToken_inject (                                // wine
     }
 }
 
+
+NTSTATUS
+IoSynchronousCallDriver_k8 (
+    PDEVICE_OBJECT DeviceObject,
+    PIRP Irp )
+{
+	/* PSEUDO CODE
+    unsigned int local_0x18; // [esp-24]
+    unsigned char local_0x14[20]; // [esp-20]
+    unsigned long v1; // eax
+    local_0x18 = (unsigned char)&local_0x18 & 0xFFFFFF00;
+    local_0x14[0] = 0;
+    local_0x18 = 1024;
+    local_0x14[8] = &local_0x18[2];
+    local_0x14[4] = &local_0x18[2];
+    *(*(Irp + 96) + 4294967292) = &local_0x18;
+    *(*(Irp + 96) + 4294967288) = &CmpCompleteFlushAndPurgeIrp;
+    *(*(Irp + 96) + 4294967263) = 224;
+    v1 = IofCallDriver( DeviceObject, Irp );
+    if( v1 == 259 ) {
+        KeWaitForSingleObject( &local_0x18, 5, 0, 0, 0 );
+        v1 = *(Irp + 24);
+	}
+    return v1;
+*/ 
+	return IofCallDriver( DeviceObject, Irp );
+
+//return STATUS_SUCCESS;
+}
 
 
 
