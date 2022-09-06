@@ -194,7 +194,59 @@ RtlSetPortableOperatingSystem_k8 (BOOLEAN IsPortable)
     return STATUS_SUCCESS;
 }
 
+NTSTATUS
+RtlInitAnsiStringEx_k8 (
+    OUT PANSI_STRING DestinationString,
+    IN PCSZ SourceString OPTIONAL )
+{
+    ULONG Length;
 
+    if (ARGUMENT_PRESENT( SourceString )) {
+        Length = strlen(SourceString);
+
+        if (Length > (MAXUSHORT - 1)) {
+            return STATUS_NAME_TOO_LONG;
+        }
+
+        DestinationString->Length = (USHORT)Length;
+        DestinationString->MaximumLength = (USHORT)(Length+1);
+    } else {
+        DestinationString->Length = 0;
+        DestinationString->MaximumLength = 0;
+    }
+    DestinationString->Buffer = (PCHAR)SourceString;
+
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS
+RtlInitUnicodeStringEx_k8 (
+    OUT PUNICODE_STRING DestinationString,
+    IN PCWSTR SourceString OPTIONAL )
+{
+    if (SourceString != NULL) {
+        SIZE_T Length = wcslen(SourceString);
+
+        if (Length > (UNICODE_STRING_MAX_CHARS - 1)) {
+            return STATUS_NAME_TOO_LONG;
+        }
+
+        Length *= sizeof(WCHAR);
+
+        DestinationString->Length = (USHORT) Length;
+        DestinationString->MaximumLength = (USHORT) (Length + sizeof(WCHAR));
+        DestinationString->Buffer = (PWSTR) SourceString;
+    } else {
+        DestinationString->Length = 0;
+        DestinationString->MaximumLength = 0;
+        DestinationString->Buffer = NULL;
+    }
+
+    return STATUS_SUCCESS;
+}
+    
+    
 NTSTATUS
 IoSetActivityIdIrp_k8 (
     PIRP    Irp,
