@@ -1731,7 +1731,9 @@ k8_w2003_x86(       PsGetCurrentThreadWin32Thread,                      0)
 k8_w2003_x86(       PsGetProcessSessionIdEx,                            4)
 k8_w2003_x86(       PsIsSystemProcess,                                  4)
 k8_w2003_x86(       SeSetAuditParameter,                               16)
-
+k8_w2003_x86(       RtlInitAnsiStringEx,                                8)
+k8_w2003_x86(       RtlInitUnicodeStringEx,                             8)
+    
 #endif  // < Win2003 x32 Extender
 
 
