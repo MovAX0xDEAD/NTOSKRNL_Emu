@@ -1731,6 +1731,9 @@ k8_w2003_x86(       PsGetCurrentThreadWin32Thread,                      0)
 k8_w2003_x86(       PsGetProcessSessionIdEx,                            4)
 k8_w2003_x86(       PsIsSystemProcess,                                  4)
 k8_w2003_x86(       SeSetAuditParameter,                               16)
+k8_w2003_x86(       RtlInitAnsiStringEx,                                8)
+k8_w2003_x86(       RtlInitUnicodeStringEx,                             8)
+k8_w2003_x86(       memcmp,                             			   12)
 
 #endif  // < Win2003 x32 Extender
 
@@ -13301,7 +13304,19 @@ k8_win8(    MmAllocateContiguousNodeMemory,     36)
 k8_win8(    RtlCheckPortableOperatingSystem,    4)
 k8_win8(    RtlQueryRegistryValuesEx,           20)
 k8_win8(    RtlSetPortableOperatingSystem,      4)
+
 k8_win8(   	IoSynchronousCallDriver,			8)
+k8_win8(   	PoFxRegisterDevice,					12)
+k8_win8(   	PoFxUnregisterDevice,				4)
+k8_win8(   	PoFxSetComponentLatency,			16)
+k8_win8(   	PoFxSetComponentResidency,			16)
+k8_win8(   	PoFxStartDevicePowerManagement,		4)
+k8_win8(   	PoFxCompleteIdleState,				8)
+k8_win8(   	PoFxCompleteIdleCondition,			8)
+k8_win8(   	PoFxReportDevicePoweredOn,			4)
+k8_win8(   	PoFxCompleteDevicePowerNotRequired,	4)
+k8_win8(   	PoFxActivateComponent,				12)
+k8_win8(   	PoFxIdleComponent,					12)
 
 #endif  // < Win8 x32/x64 Extender
 
