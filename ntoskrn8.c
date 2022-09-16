@@ -2482,12 +2482,7 @@ SeQueryInformationToken_inject (                                // wine
 
 
 
-
-//
-// Runtime Power Management Framework
-//
-
-
+// https://github.com/pappyN4/NTOSKRNL_Emu merged with latest pappyN4 mods
 
 NTSTATUS
 RtlInitAnsiStringEx_k8 (
@@ -2542,6 +2537,7 @@ RtlInitUnicodeStringEx_k8 (
 }
 
 
+// https://stackoverflow.com/questions/5017659/implementing-memcmp
 
 INT
 memcmp_k8(
@@ -2559,6 +2555,56 @@ memcmp_k8(
 
     return(*((unsigned char*)buf1) - *((unsigned char*)buf2));
 }
+
+
+
+
+// https://github.com/microsoft/Windows-driver-samples/blob/main/general/pcidrv/kmdf/HW/nic_init.c
+
+PVOID MmMapIoSpaceEx_k8(
+    PHYSICAL_ADDRESS PhysicalAddress,
+    SIZE_T NumberOfBytes,
+	ULONG Protect
+    )
+{
+    typedef
+    PVOID
+    (*PFN_MM_MAP_IO_SPACE_EX) (
+        PHYSICAL_ADDRESS PhysicalAddress,
+        SIZE_T NumberOfBytes,
+        ULONG Protect
+        );
+
+    UNICODE_STRING         name;
+    PFN_MM_MAP_IO_SPACE_EX pMmMapIoSpaceEx;
+
+    RtlInitUnicodeString(&name, L"MmMapIoSpaceEx");
+    pMmMapIoSpaceEx = (PFN_MM_MAP_IO_SPACE_EX) (ULONG_PTR)MmGetSystemRoutineAddress(&name);
+
+    if (pMmMapIoSpaceEx != NULL){
+        //
+        // Call WIN10 API if available
+        //        
+        return pMmMapIoSpaceEx(PhysicalAddress,
+                               NumberOfBytes,
+                               PAGE_READWRITE | PAGE_NOCACHE); 
+    }
+
+    //
+    // Supress warning that MmMapIoSpace allocates executable memory.
+    // This function is only used if the preferred API, MmMapIoSpaceEx
+    // is not present. MmMapIoSpaceEx is available starting in WIN10.
+    //
+    #pragma warning(suppress: 30029)
+    return MmMapIoSpace(PhysicalAddress, NumberOfBytes, MmNonCached); 
+}
+
+
+
+//
+// Runtime Power Management Framework
+//
+
 
 
 /* START NEW section*/
