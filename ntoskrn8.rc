@@ -1,13 +1,13 @@
 #include <verrsrc.h>
 #include <ntverp.h>
 
-#define VER_FILEVERSION              5,1,2600,10
-#define VER_FILEVERSION_STR         "5.1.2600.10"
+#define VER_FILEVERSION              5,1,2600,12
+#define VER_FILEVERSION_STR         "5.1.2600.12"
 
 
 #define VER_FILETYPE                VFT_DRV
 #define VER_FILESUBTYPE             VFT2_DRV_SYSTEM
-#define VER_FILEDESCRIPTION_STR     "XP/W2003 ntoskrnl.exe Extender"
+#define VER_FILEDESCRIPTION_STR     "XP / 2003 / Vista / 7 ntoskrnl.exe Extender"
 #define VER_INTERNALNAME_STR        "ntoskrn8.sys"
 #define VER_ORIGINALFILENAME_STR    "ntoskrn8.sys"
 #undef VER_LEGALCOPYRIGHT_STR

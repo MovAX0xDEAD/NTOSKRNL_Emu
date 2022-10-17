@@ -164,6 +164,8 @@ KeFlushQueuedDpcs_k8 (void)    // WinXP RTM, SP1
 }
 
 
+
+
 NTSTATUS
 RtlQueryRegistryValuesEx_k8 (
     ULONG                       RelativeTo,
@@ -2479,6 +2481,395 @@ SeQueryInformationToken_inject (                                // wine
 }
 
 
+
+// https://github.com/pappyN4/NTOSKRNL_Emu merged with latest pappyN4 mods
+
+NTSTATUS
+RtlInitAnsiStringEx_k8 (
+    OUT PANSI_STRING DestinationString,
+    IN PCSZ SourceString OPTIONAL )
+{
+    ULONG Length;
+
+    if (ARGUMENT_PRESENT( SourceString )) {
+        Length = strlen(SourceString);
+
+        if (Length > (MAXUSHORT - 1)) {
+            return STATUS_NAME_TOO_LONG;
+        }
+
+        DestinationString->Length = (USHORT)Length;
+        DestinationString->MaximumLength = (USHORT)(Length+1);
+    } else {
+        DestinationString->Length = 0;
+        DestinationString->MaximumLength = 0;
+    }
+    DestinationString->Buffer = (PCHAR)SourceString;
+
+    return STATUS_SUCCESS;
+}
+
+
+NTSTATUS
+RtlInitUnicodeStringEx_k8 (
+    OUT PUNICODE_STRING DestinationString,
+    IN PCWSTR SourceString OPTIONAL )
+{
+    if (SourceString != NULL) {
+        SIZE_T Length = wcslen(SourceString);
+
+        if (Length > (UNICODE_STRING_MAX_CHARS - 1)) {
+            return STATUS_NAME_TOO_LONG;
+        }
+
+        Length *= sizeof(WCHAR);
+
+        DestinationString->Length = (USHORT) Length;
+        DestinationString->MaximumLength = (USHORT) (Length + sizeof(WCHAR));
+        DestinationString->Buffer = (PWSTR) SourceString;
+    } else {
+        DestinationString->Length = 0;
+        DestinationString->MaximumLength = 0;
+        DestinationString->Buffer = NULL;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+
+// https://stackoverflow.com/questions/5017659/implementing-memcmp
+
+INT
+memcmp_k8(
+	const void* buf1,
+	const void* buf2,
+    size_t count
+){
+    if(!count)
+        return(0);
+
+    while(--count && *(char*)buf1 == *(char*)buf2 ) {
+        buf1 = (char*)buf1 + 1;
+        buf2 = (char*)buf2 + 1;
+    }
+
+    return(*((unsigned char*)buf1) - *((unsigned char*)buf2));
+}
+
+
+
+
+// https://github.com/microsoft/Windows-driver-samples/blob/main/general/pcidrv/kmdf/HW/nic_init.c
+
+PVOID 
+MmMapIoSpaceEx_k8(
+    PHYSICAL_ADDRESS PhysicalAddress,
+    SIZE_T NumberOfBytes,
+	ULONG Protect
+    )
+{
+    return MmMapIoSpace(PhysicalAddress, NumberOfBytes, MmNonCached); 
+}
+
+
+
+WCHAR
+RtlDowncaseUnicodeChar_k8(
+    IN WCHAR SourceCharacter
+    )
+{
+	return (WCHAR)tolower(SourceCharacter);
+}
+
+//
+// Runtime Power Management Framework
+//
+
+
+
+/* START NEW section*/
+
+//typedef PO_FX_DEVICE, *PPO_FX_DEVICE;
+
+NTSTATUS
+SmKmGenericCompletion(
+    PDEVICE_OBJECT DeviceObject,
+    PIRP Irp,
+    PVOID Context)
+{
+  KeSetEvent((PRKEVENT) Context, 0, FALSE);
+  return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
+
+NTSTATUS
+IoSynchronousCallDriver_k8(
+    PDEVICE_OBJECT DeviceObject,
+    PIRP Irp
+    )
+{
+    PIO_STACK_LOCATION IrpSp;
+    NTSTATUS Status;
+    KEVENT Event;
+
+    KeInitializeEvent(&Event, NotificationEvent, FALSE);
+    IrpSp = IoGetNextIrpStackLocation(Irp);
+    IrpSp->Context           = &Event;
+    IrpSp->CompletionRoutine = (PIO_COMPLETION_ROUTINE) SmKmGenericCompletion;
+    IrpSp->Control           = SL_INVOKE_ON_ERROR | SL_INVOKE_ON_SUCCESS | SL_INVOKE_ON_CANCEL; // 0xE0
+
+    Status = IofCallDriver(DeviceObject, Irp);
+    if (Status == STATUS_PENDING) {
+        KeWaitForSingleObject(&Event, Suspended, KernelMode, FALSE, NULL);
+        Status = Irp->IoStatus.Status;
+    }
+
+    return Status;
+}
+
+
+
+
+
+	
+typedef PO_FX_COMPONENT_ACTIVE_CONDITION_CALLBACK, *PPO_FX_COMPONENT_ACTIVE_CONDITION_CALLBACK;
+typedef PO_FX_COMPONENT_IDLE_CONDITION_CALLBACK, *PPO_FX_COMPONENT_IDLE_CONDITION_CALLBACK;
+typedef PO_FX_COMPONENT_IDLE_STATE_CALLBACK, *PPO_FX_COMPONENT_IDLE_STATE_CALLBACK;
+typedef PO_FX_DEVICE_POWER_REQUIRED_CALLBACK, *PPO_FX_DEVICE_POWER_REQUIRED_CALLBACK;
+typedef PO_FX_DEVICE_POWER_NOT_REQUIRED_CALLBACK, *PPO_FX_DEVICE_POWER_NOT_REQUIRED_CALLBACK;
+typedef PO_FX_POWER_CONTROL_CALLBACK, *PPO_FX_POWER_CONTROL_CALLBACK;
+
+typedef struct _PO_FX_COMPONENT_IDLE_STATE {
+    ULONGLONG TransitionLatency;
+    ULONGLONG ResidencyRequirement;
+    ULONG NominalPower;
+} PO_FX_COMPONENT_IDLE_STATE, *PPO_FX_COMPONENT_IDLE_STATE;
+
+
+
+typedef struct _PO_FX_COMPONENT_V1 {
+    GUID Id;
+    ULONG IdleStateCount;
+    ULONG DeepestWakeableIdleState;
+    PPO_FX_COMPONENT_IDLE_STATE IdleStates;
+} PO_FX_COMPONENT_V1, *PPO_FX_COMPONENT_V1;
+
+typedef struct _PO_FX_DEVICE_V1 {
+  ULONG                                      Version;
+  ULONG                                      ComponentCount;
+  PPO_FX_COMPONENT_ACTIVE_CONDITION_CALLBACK ComponentActiveConditionCallback;
+  PPO_FX_COMPONENT_IDLE_CONDITION_CALLBACK   ComponentIdleConditionCallback;
+  PPO_FX_COMPONENT_IDLE_STATE_CALLBACK       ComponentIdleStateCallback;
+  PPO_FX_DEVICE_POWER_REQUIRED_CALLBACK      DevicePowerRequiredCallback;
+  PPO_FX_DEVICE_POWER_NOT_REQUIRED_CALLBACK  DevicePowerNotRequiredCallback;
+  PPO_FX_POWER_CONTROL_CALLBACK              PowerControlCallback;
+  PVOID                                      DeviceContext;
+  PO_FX_COMPONENT_V1                         Components[ANYSIZE_ARRAY];
+} PO_FX_DEVICE, *PPO_FX_DEVICE;
+
+
+//
+// Runtime Power Management Framework
+//
+
+
+
+DECLARE_HANDLE(POHANDLE);
+
+
+/* 8.0 8056 */
+
+NTSTATUS
+PoFxRegisterDevice_k8 (
+    PDEVICE_OBJECT Pdo,
+    PPO_FX_DEVICE Device,
+    POHANDLE *Handle
+    )
+	
+	{
+    return STATUS_SUCCESS;		
+	}
+	
+
+
+VOID
+PoFxUnregisterDevice_k8 (
+    POHANDLE Handle
+	){
+		
+	}
+	
+VOID
+PoFxSetComponentLatency_k8 (
+    POHANDLE Handle,
+    ULONG Component,
+    ULONGLONG Latency
+	){
+		
+	}
+	
+VOID
+PoFxSetComponentResidency_k8 (
+    POHANDLE Handle,
+    ULONG Component,
+    ULONGLONG Residency
+    ){
+		
+	}	
+	
+VOID
+PoFxStartDevicePowerManagement_k8 (
+    POHANDLE Handle
+    ){
+		
+	}
+
+VOID
+PoFxCompleteIdleState_k8 (
+    POHANDLE Handle,
+    ULONG Component
+    ){
+		
+	}
+
+
+VOID
+PoFxCompleteIdleCondition_k8 (
+    POHANDLE Handle,
+    ULONG Component
+    ){
+		
+	}
+
+VOID
+PoFxReportDevicePoweredOn_k8 (
+    POHANDLE Handle
+    ){
+		
+	}
+	
+VOID
+PoFxCompleteDevicePowerNotRequired_k8 (
+    POHANDLE Handle
+    ){
+		
+	}
+
+
+
+VOID
+PoFxActivateComponent_k8 (
+    POHANDLE Handle,
+    ULONG Component,
+    ULONG Flags
+    ){
+		
+	}
+
+VOID
+PoFxIdleComponent_k8 (
+    POHANDLE Handle,
+    ULONG Component,
+    ULONG Flags
+    ){
+		
+	}
+	
+	
+/* 8.0 RTM */
+	
+	
+VOID
+PoFxSetDeviceIdleTimeout (
+    POHANDLE Handle,
+    ULONGLONG IdleTimeout
+    ){
+		
+	}
+
+
+
+typedef struct _IO_REPORT_INTERRUPT_ACTIVE_STATE_PARAMETERS {
+
+    //
+    // Version - Supplies the type of interrupt reporting operation
+    //     requested by this structure.  This field must match the connection
+    //     type returned by a corresponding successful call to
+    //     IoConnectInterruptEx.
+    //
+
+    ULONG Version;
+
+    //
+    // ConnectionContext - Supplies a union containing the connection context
+    //     associated with the interrupt being reported.  When
+    //     referring to fully specified or line based interrupts, this
+    //     parameter supplies the interrupt object pointer that was returned
+    //     when the interrupt was initially connected.  When reporting a
+    //     set of interrupt messages, this parameter supplies the interrupt
+    //     message information table pointer that was returned when the
+    //     interrupt messages were initially connected.
+    //
+
+    union {
+        PVOID Generic;
+        PKINTERRUPT InterruptObject;
+        PIO_INTERRUPT_MESSAGE_INFO InterruptMessageTable;
+    } ConnectionContext;
+
+} IO_REPORT_INTERRUPT_ACTIVE_STATE_PARAMETERS,
+  *PIO_REPORT_INTERRUPT_ACTIVE_STATE_PARAMETERS;
+  
+VOID
+IoReportInterruptActive (
+    PIO_REPORT_INTERRUPT_ACTIVE_STATE_PARAMETERS Parameters
+    ){
+		
+	}
+
+VOID
+IoReportInterruptInactive (
+    PIO_REPORT_INTERRUPT_ACTIVE_STATE_PARAMETERS Parameters
+    ){
+		
+	}
+	
+
+VOID
+PoFxSetComponentWake (
+    POHANDLE Handle,
+    ULONG Component,
+    BOOLEAN WakeHint
+    ){
+		
+	}
+
+NTSTATUS
+PoFxPowerControl (
+    POHANDLE Handle,
+    LPCGUID PowerControlCode,
+    PVOID InBuffer,
+    SIZE_T InBufferSize,
+    PVOID OutBuffer,
+    SIZE_T OutBufferSize,
+    PSIZE_T BytesReturned
+    ){
+		return STATUS_SUCCESS;
+		
+	}
+	
+	
+	
+	
+	
+/* END NEW section*/
+
+
+
+
+
+
+ 
 
 
 NTSTATUS

@@ -46,7 +46,7 @@ to:
 
 
 # STORPORT Windows 7 Emu\_Extender #
-This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.23403 to emulate Windows 8' STORPORT.SYS
+This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.xxxxx to emulate Windows 8' STORPORT.SYS
 
 **How-To:**
 1) Compile ntoskrnl Emu\_Extender
@@ -57,7 +57,7 @@ This is Library of missing functions for Windows 7' STORPORT.SYS v6.1.7601.23403
 
 # Ported drivers: #
 
-## Windows 7's WDF 1.11 for Windows XP/2003##
+## Windows 7's WDF 1.11 for Windows XP/2003 ##
 
 Last version for Windows XP/2003 is 1.9, but possible to backport 1.11 version:
 1) Get files from Windows 7 Updates (KB3125574):
@@ -74,7 +74,7 @@ If need coexist with original WDF1.9 drivers:
 4) Rename WDF01000.SYS->WDF01\_W8.SYS, WdfLdr.sys->WdfLdr8.sys
 5) In WDF01\_W8.SYS replace string "**WdfLdr.sys**" to "**WdfLdr8.sys**" in import section
 6) In WdfLdr8.sys replace unicode string "**\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d000**" to "**\Registry\Machine\System\CurrentControlSet\Services\Wdf%02d_w8**"
-7) In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6** (x32), ** ** to ** ** (x64)
+7) In WdfLdr8.sys replace hex pattern **F6 78 1B F6** to **F6 EB 1B F6** (x32), **85 FF 78 2A** to **85 FF EB 2A** (x64)
 8) In target driver XXX.sys replace string "**WdfLdr.sys**" to "**WdfLdr8.sys**" in import section
 9) In .INF of ported driver add creating new service:
 ```
@@ -93,9 +93,9 @@ If need coexist with original WDF1.9 drivers:
 ## Windows 7's Storport.sys for Windows XP/2003 ##
 
 Storport was released since Windows 2003, but possible to backport Windows 7 version:
-1) Get files from Windows 7 Updates (KB3125574):
+1) Get files from Windows 7 Updates (KB5010404):
 
-       storport.sys	v6.1.7601.23403
+       storport.sys	v6.1.7601.25735
 
 2) In storport.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 
@@ -105,7 +105,13 @@ Storport was released since Windows 2003, but possible to backport Windows 7 ver
 
    x64 - replace hex pattern **8B 83 C0 01 00 00** to **B8 00 00 00 00 90** (mov eax, [rbx+1C0h] -> mov eax, 0)
 
-4) Recalc checksum
+4) Windows 7 storport does not report SMART data when using STORAHCI, need to patch RaUnitScsiMiniportIoctl in storport.sys to enable SMART reporting:
+
+   x32 - replace hex pattern **75 36 8B 45 0C 81 78 10 00 06 1B 00 75 2A** to **90 90 8B 45 0C 81 78 10 00 06 1B 00 90 90**
+
+   x64 - replace hex pattern **75 36 81 7F 10 00 06 1B 00 75 2D** to **90 90 81 7F 10 00 06 1B 00 90 90**
+
+5) Recalc checksum
 
 
 ## Windows 7's NVMe driver for Windows XP ##
@@ -134,15 +140,54 @@ from Vista Beta/Longhorn 5456.5:
 
 2) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, wpprecorder.sys, usbd.sys change **security_cookie** to random value
 3) In files ucx01000.sys, usbhub3.sys, usbxhci.sys, ksecdd.sys replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
-4) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**
-5) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
-6) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
-7) Recalc checksum
+4) For x64 usbd.sys, replace string name "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
+5) Rename ksecdd.sys->**ksecd8.sys**, usbd.sys->**usbd\_w8.sys**, wpprecorder.sys->**wpprecor.sys**
+6) In files ucx01000.sys, usbhub3.sys, usbxhci.sys replace string name "**WppRecorder.sys**" to "**WppRecor.sys**" in import section
+7) In usbhub3.sys replace string name "**ksecdd.sys**" to "**ksecd8.sys**" in import section
+8) In usbhub3.sys replace string name "**usbd.sys**" to "**usbd\_w8.sys**" in import section
+9) Windows 8 USB3 driver always report USB2 speed on inserted USB3 devices, need to patch usbhub3.sys for proper speed reporting:
+
+   x32 - replace hex pattern **83 7E 54 03 75 09** to **83 7E 54 03 EB 09**
+
+   x64 - replace hex pattern **00 00 00 03 75 0A** to **00 00 00 03 EB 0A**
+
+10) Recalc checksum
+
+
+## Windows 8's UASP (USB Attached SCSI) driver for Windows XP ##
+Needs files from Windows 8 USB3 driver (usbd_w8.sys and wpprecor.sys).
+
+Note that some motherboards may have a deadlock issue when trying to reboot with the UAS device connected.  Windows will turn off but not finish the reboot cycle.  If you Safe Remove the UAS device reboot will finish normally.  There is the option of using the deadlock patched version of the driver that fixes the issue.
+
+1) Get required files from Windows 8 (RTM ISO):
+
+       uaspstor.sys      v6.2.9200.16384
+
+2) In uaspstor.sys change **security_cookie** to random value
+3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**storpor8.sys**","**usbd.sys**" to "**usbd\_w8.sys**", "**WppRecorder.sys**" to "**WppRecor.sys**"   in import section
+4) Recalc checksum
+
+Deadlock patched UASP (CAUTION: Same as with a USB flash drive, rebooting while writing data will corrupt your data)
+
+2) In uaspstor.sys change **security_cookie** to random value
+3) In uaspstor.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**","**storport.sys**" to "**stor_ua8.sys**","**usbd.sys**" to "**usbd\_w8.sys**", "**WppRecorder.sys**" to "**WppRecor.sys**"  in import section
+4) Create a copy of "**storport.sys**" and rename to "**stor_uas.sys**", create a copy of "**storpor8.sys**" and rename to "**stor_ua8.sys**"
+5) In stor_ua8.sys replace string "**storport.sys**" to "**stor_uas.sys**"
+6) In stor_uas.sys patch RaidAdapterSetSystemPowerCompletion to fix deadlock.  Only the UASP driver will use this patched storport.
+
+   x32 - replace hex pattern **75 0B 85 FF** to **EB 0B 85 FF**
+
+   x64 - replace hex pattern **75 0C 41 3B FE** to **EB 0C 41 3B FE**
+   
+7) In stor_uas.sys replace unicode string "\ D e v i c e \ R a i d P o r t" to something else like "\ D e v i c e \ U a s p P o r t"		
+
+8) Recalc checksum
+
 
 
 ## Windows 8's STORAHCI driver for Windows XP ##
 
-STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys v6.1.7601.23403 from Windows 7
+STORAHCI driver requires storport.sys from Windows 8, but possible to use storport.sys v6.1.7601.xxxxx from Windows 7
 Storport.sys from Windows 7 more compatible with Windows XP/2003 because it still call required *PoStartNextPowerIrp* when processing power IRPs. Microsoft removed calls to PoStartNextPowerIrp in Windows 8's storport.sys, without this call Windows XP/2003 kernel cannot finish current power IRP and start next IRP => it generate BSOD (0x0000009F).
 Also storport.sys from Windows 7 has compatibility mode to allow old XP/2003 kernels write crashdumps through storport based disk drivers. In storport.sys from Windows 8 compatibility mode was removed, writing crashdumps possible only with new kernels.
 
@@ -151,9 +196,9 @@ Take attention:
 Windows 8's STORAHCI + Windows 7's STORPORT may have **significal performance drop and high CPU usage**, there is no fix yet
 
 
-1) Get files from Windows 8 (RTM ISO):
+1) Get files from Windows 8 Updates (KB5006739):
 
-       storahci.sys	v6.2.9200.16384
+       storahci.sys	v6.2.9200.20652
 
 2) In storahci.sys replace string "**storport.sys**" to "**storpor8.sys**" in import section
 
@@ -181,12 +226,12 @@ If you want compile storahci from sources (from Windows 8 DDK Samples), comment 
 
 ## Windows 7's MSAHCI driver for Windows XP ##
 
-1) Get files from Windows 7 Updates (KB3125574):
+1) Get files from Windows 7 Updates (KB5010404):
 
-       atapi.sys	v6.1.7601.23403
-       ataport.sys	v6.1.7601.23403
-       msahci.sys	v6.1.7601.23403
-       pciidex.sys	v6.1.7601.23403
+       atapi.sys	v6.1.7601.25735
+       ataport.sys	v6.1.7601.25735
+       msahci.sys	v6.1.7601.25735
+       pciidex.sys	v6.1.7601.25735
 
 2) In ataport.sys, pciidex.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 
@@ -200,7 +245,7 @@ If you want compile storahci from sources (from Windows 8 DDK Samples), comment 
 ```
 * x64: replace hex patterns: 
 1) **FF 50 78** to **EB 2A 90**
-2) offset +2Ch: **CC CC CC CC CC CC CC CC** to **FF 90 80 00 00 00 EB CF**, same in asm code:
+2) offset +2Ch: **CC CC CC CC CC CC CC CC 48 89 6C** to **FF 90 80 00 00 00 EB CF 48 89 6C**, same in asm code:
 ```
        mov     rax, cs:HalDispatchTable
        ...
@@ -228,5 +273,23 @@ msahci.sys enumerates IDE/SATA channels as "Internal\_IDE\_Channel" and compatib
 These drivers require storport.sys from Windows 7, use backported one 
 
 1) In file iaStorA.sys/iaStorAC.sys/iaStorAVC.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section (do not change second string "**NTOSKRNL.exe**")
+
+2) Recalc checksum
+
+
+## AMD SATA AHCI Driver 1.2.1.402 for Windows XP ##
+
+This driver requires storport.sys from Windows 7, use backported one 
+
+1) In file amd_xata.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
+
+2) Recalc checksum
+
+
+## Samsung NVMe Driver 3.3.0.2003 for Windows XP ##
+
+This driver requires storport.sys from Windows 7, use backported one 
+
+1) In file secnvme.sys/secnvmeF.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 
 2) Recalc checksum

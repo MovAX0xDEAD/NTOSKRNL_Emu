@@ -1731,6 +1731,9 @@ k8_w2003_x86(       PsGetCurrentThreadWin32Thread,                      0)
 k8_w2003_x86(       PsGetProcessSessionIdEx,                            4)
 k8_w2003_x86(       PsIsSystemProcess,                                  4)
 k8_w2003_x86(       SeSetAuditParameter,                               16)
+k8_w2003_x86(       RtlInitAnsiStringEx,                                8)
+k8_w2003_x86(       RtlInitUnicodeStringEx,                             8)
+k8_w2003_x86(       memcmp,                             			   12)
 
 #endif  // < Win2003 x32 Extender
 
@@ -6919,6 +6922,20 @@ bypass(ZwWaitForMultipleObjects)
 bypass(ZwWaitForSingleObject)
 bypass(ZwWriteFile)
 bypass(ZwYieldExecution)
+
+// added missing exports according to ntoskrnl.exe v6.0.6003.21442 
+
+bypass(FsRtlInitializeExtraCreateParameter)
+bypass(FsRtlInitializeExtraCreateParameterList)
+bypass(FsRtlPrepareToReuseEcp)
+bypass(FsRtlRegisterUncProviderEx2)
+bypass(IoRegisterFsRegistrationChangeMountAware)
+bypass(KeConnectInterruptForHal)
+bypass(KeFlushCurrentTbImmediately)
+bypass(PsDereferenceKernelStack)
+bypass(PsReferenceKernelStack)
+bypass(RtlIsSandboxedToken)
+
 #endif //    Vista x32 ntoskrnl export
 
 
@@ -8812,6 +8829,20 @@ bypass(ZwWaitForMultipleObjects)
 bypass(ZwWaitForSingleObject)
 bypass(ZwWriteFile)
 bypass(ZwYieldExecution)
+
+// added missing exports according to ntoskrnl.exe v6.0.6003.21442 
+
+bypass(FsRtlInitializeExtraCreateParameter)
+bypass(FsRtlInitializeExtraCreateParameterList)
+bypass(FsRtlPrepareToReuseEcp)
+bypass(FsRtlRegisterUncProviderEx2)
+bypass(IoRegisterFsRegistrationChangeMountAware)
+bypass(KeConnectInterruptForHal)
+bypass(KiMcaExceptionHandlerWrapper)
+bypass(PsDereferenceKernelStack)
+bypass(PsReferenceKernelStack)
+bypass(RtlIsSandboxedToken)
+
 #endif //    Vista x64 ntoskrnl export
 
 
@@ -8904,6 +8935,8 @@ k8_win7(    PcwRegister,                        8)
 k8_win7(    PcwUnregister,                      4)
 k8_win7(    PoEndDeviceBusy,                    4)
 k8_win7(    PoStartDeviceBusy,                  4)
+k8_win7(    RtlDowncaseUnicodeChar,             4)
+
 
 #endif  // < Win7 x32/x64 Extender
 
@@ -11102,6 +11135,23 @@ bypass(ZwWaitForMultipleObjects)
 bypass(ZwWaitForSingleObject)
 bypass(ZwWriteFile)
 bypass(ZwYieldExecution)
+
+
+// added missing exports according to ntoskrnl.exe v6.1.7601.25920
+
+bypass(EtwSetInformation)
+bypass(FsRtlPrepareToReuseEcp)
+bypass(FsRtlRegisterUncProviderEx2)
+bypass(IoEnumerateRegisteredFiltersListEx)
+bypass(IoRegisterFsRegistrationChangeMountAwareEx)
+bypass(KeConnectInterruptForHal)
+bypass(KiMcaExceptionHandlerWrapper)
+bypass(PsDereferenceKernelStack)
+bypass(PsReferenceKernelStack)
+bypass(RtlIsSandboxedToken)
+bypass(SeGetLogonSessionToken)
+
+
 #endif //    Win7 x32 ntoskrnl export
 
 
@@ -13221,6 +13271,24 @@ bypass(ZwWaitForMultipleObjects)
 bypass(ZwWaitForSingleObject)
 bypass(ZwWriteFile)
 bypass(ZwYieldExecution)
+
+
+// added missing exports according to ntoskrnl.exe v6.1.7601.25920
+
+
+bypass(EtwSetInformation)
+bypass(FsRtlPrepareToReuseEcp)
+bypass(FsRtlRegisterUncProviderEx2)
+bypass(IoEnumerateRegisteredFiltersListEx)
+bypass(IoRegisterFsRegistrationChangeMountAwareEx)
+bypass(KeConnectInterruptForHal)
+bypass(KeFlushCurrentTbImmediately)
+bypass(PsDereferenceKernelStack)
+bypass(PsReferenceKernelStack)
+bypass(RtlIsSandboxedToken)
+bypass(SeGetLogonSessionToken)
+
+
 #endif //    Win7 x64 ntoskrnl export
 
 
@@ -13237,6 +13305,21 @@ k8_win8(    MmAllocateContiguousNodeMemory,     36)
 k8_win8(    RtlCheckPortableOperatingSystem,    4)
 k8_win8(    RtlQueryRegistryValuesEx,           20)
 k8_win8(    RtlSetPortableOperatingSystem,      4)
+
+k8_win8(   	IoSynchronousCallDriver,			8)
+k8_win8(   	PoFxRegisterDevice,					12)
+k8_win8(   	PoFxUnregisterDevice,				4)
+k8_win8(   	PoFxSetComponentLatency,			16)
+k8_win8(   	PoFxSetComponentResidency,			16)
+k8_win8(   	PoFxStartDevicePowerManagement,		4)
+k8_win8(   	PoFxCompleteIdleState,				8)
+k8_win8(   	PoFxCompleteIdleCondition,			8)
+k8_win8(   	PoFxReportDevicePoweredOn,			4)
+k8_win8(   	PoFxCompleteDevicePowerNotRequired,	4)
+k8_win8(   	PoFxActivateComponent,				12)
+k8_win8(   	PoFxIdleComponent,					12)
+k8_win8(   	MmMapIoSpaceEx,					    16)
+
 
 #endif  // < Win8 x32/x64 Extender
 
