@@ -8935,6 +8935,7 @@ k8_win7(    PcwRegister,                        8)
 k8_win7(    PcwUnregister,                      4)
 k8_win7(    PoEndDeviceBusy,                    4)
 k8_win7(    PoStartDeviceBusy,                  4)
+k8_win7(    RtlDowncaseUnicodeChar,             4)
 
 
 #endif  // < Win7 x32/x64 Extender
