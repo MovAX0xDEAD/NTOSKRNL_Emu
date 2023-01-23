@@ -93,7 +93,7 @@ If need coexist with original WDF1.9 drivers:
 ## Windows 7's Storport.sys for Windows XP/2003 ##
 
 Storport was released since Windows 2003, but possible to backport Windows 7 version:
-1) Get files from Windows 7 Updates (KB5010404):
+1) Get files from Windows 7 Updates (KB5022338):
 
        storport.sys	v6.1.7601.25735
 
@@ -226,12 +226,12 @@ If you want compile storahci from sources (from Windows 8 DDK Samples), comment 
 
 ## Windows 7's MSAHCI driver for Windows XP ##
 
-1) Get files from Windows 7 Updates (KB5010404):
+1) Get files from Windows 7 Updates (KB5022338):
 
-       atapi.sys	v6.1.7601.25735
-       ataport.sys	v6.1.7601.25735
-       msahci.sys	v6.1.7601.25735
-       pciidex.sys	v6.1.7601.25735
+       atapi.sys	v6.1.7601.26057
+       ataport.sys	v6.1.7601.26057
+       msahci.sys	v6.1.7601.26057
+       pciidex.sys	v6.1.7601.26057
 
 2) In ataport.sys, pciidex.sys replace string "**ntoskrnl.exe**" to "**ntoskrn8.sys**" in import section
 
