@@ -1,8 +1,8 @@
 #include <verrsrc.h>
 #include <ntverp.h>
 
-#define VER_FILEVERSION              5,1,2600,10
-#define VER_FILEVERSION_STR         "5.1.2600.10"
+#define VER_FILEVERSION              5,1,2600,11
+#define VER_FILEVERSION_STR         "5.1.2600.11"
 
 
 #define VER_FILETYPE                VFT_DRV
