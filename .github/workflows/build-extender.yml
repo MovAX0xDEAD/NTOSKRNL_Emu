@@ -1,0 +1,300 @@
+name: Build NTOSKRNL Extender (WDK 7.1 install)
+
+on:
+  push:
+
+jobs:
+  build-extender:
+    runs-on: windows-latest
+
+    env:
+      WDK_ISO_URL: https://github.com/KunYi/WDK_DDKArchive/releases/download/WDK_v7.1.0/GRMWDK_EN_7600_1.ISO
+      WDK_INSTALL_DIR: C:\WinDDK
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download WDK 7.1 ISO
+        shell: pwsh
+        run: |
+          $isoPath = "$env:TEMP\wdk71.iso"
+          Write-Host "Downloading WDK ISO to $isoPath"
+          Invoke-WebRequest -Uri $env:WDK_ISO_URL -OutFile $isoPath
+          Write-Host "Download finished"
+
+      - name: Extract WDK ISO
+        shell: pwsh
+        run: |
+          $isoPath  = "$env:TEMP\wdk71.iso"
+          $extract  = "$env:TEMP\wdk71"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+
+          Write-Host "Extracting ISO to $extract"
+          7z.exe x $isoPath "-o$extract" -y | Out-Null
+
+          # Find KitSetup.exe
+          $kitSetup = Get-ChildItem -Path $extract -Recurse -Filter "KitSetup.exe" |
+            Select-Object -First 1
+
+          if (-not $kitSetup) {
+            Write-Error "KitSetup.exe not found in extracted ISO!"
+            exit 1
+          }
+
+          Write-Host "Found KitSetup.exe at: $($kitSetup.FullName)"
+          "WDK_MEDIA=$extract" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+          "KITSETUP_PATH=$($kitSetup.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Install WDK 7.1 (silent console)
+        shell: pwsh
+        run: |
+          if (-not $env:KITSETUP_PATH) {
+            Write-Error "KITSETUP_PATH not set"
+            exit 1
+          }
+
+          $kitDir  = Split-Path $env:KITSETUP_PATH -Parent
+          $logFile = "$env:TEMP\WDK_Setup.log"
+          $target  = $env:WDK_INSTALL_DIR
+
+          Write-Host "Running KitSetup.exe from $kitDir"
+          Write-Host "Target install dir: $target"
+          Write-Host "Log file: $logFile"
+
+          $args = @(
+            '/no-view'
+            '/ui-level', 'EXPRESS'
+            '/install', 'ALL'
+            '/install-location', $target
+            '/log', $logFile
+          )
+
+          $proc = Start-Process -FilePath $env:KITSETUP_PATH `
+                                -ArgumentList $args `
+                                -WorkingDirectory $kitDir `
+                                -Wait `
+                                -PassThru
+
+          Write-Host "KitSetup.exe exit code: $($proc.ExitCode)"
+
+          if (Test-Path $logFile) {
+            Write-Host "=== KitSetup.log (last 50 lines) ==="
+            Get-Content $logFile -Tail 50
+          }
+
+          if (-not (Test-Path $target)) {
+            Write-Error "WDK install directory $target not found after KitSetup!"
+            exit 1
+          }
+
+          Write-Host "WDK appears to be installed under $target"
+
+          $setenv = Get-ChildItem -Path $target -Recurse -Filter "setenv.bat" -ErrorAction SilentlyContinue |
+                    Select-Object -First 1
+
+          if (-not $setenv) {
+            Write-Error "setenv.bat not found under $target"
+            exit 1
+          }
+
+          $binDir  = Split-Path $setenv.FullName -Parent
+          $ddkRoot = Split-Path $binDir -Parent
+
+          Write-Host "Detected DDKROOT: $ddkRoot"
+
+          "DDKROOT=$ddkRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Patch ntddk.h / wdm.h (exact-line replace)
+        shell: pwsh
+        run: |
+          $inc = "C:\WinDDK\7600.16385.1\inc\ddk"
+
+          $files = @{
+            "ntddk.h" = 9231
+            "wdm.h"   = 19432
+          }
+
+          foreach ($kvp in $files.GetEnumerator()) {
+            $file = $kvp.Key
+            $lineNum = $kvp.Value
+
+            $path = Join-Path $inc $file
+            if (-not (Test-Path $path)) {
+              Write-Error "$file not found in WDK include dir"
+              exit 1
+            }
+
+            Write-Host "Patching $file (line $lineNum)"
+
+            $lines = Get-Content $path
+
+            if ($lineNum -gt $lines.Count) {
+              Write-Error "$file has only $($lines.Count) lines, expected >= $lineNum"
+              exit 1
+            }
+
+            # Replace only at the specific line
+            $line = $lines[$lineNum - 1]
+            $newLine = $line -replace 'NTDDI_WIN2K', 'NTDDI_VISTA'
+            $lines[$lineNum - 1] = $newLine
+
+            Set-Content -Path $path -Value $lines -Encoding ascii
+          }
+
+          Write-Host "Exact-line patches applied."
+
+      - name: Build XP x86
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x86 WXP no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Build XP x64 (WNET amd64)
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x64 WNET no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Build Server 2003 x86 (WNET x86)
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x86 WNET no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Build Vista x86 (WLH x86)
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x86 WLH no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Build Vista x64 (WLH amd64)
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x64 WLH no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Build Windows 7 x86 (WIN7 x86)
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x86 WIN7 no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Build Windows 7 x64 (WIN7 amd64)
+        shell: cmd
+        run: |
+          echo DDKROOT=%DDKROOT%
+          if "%DDKROOT%"=="" (
+            echo DDKROOT is not set
+            exit /b 1
+          )
+          set SRCDIR=%GITHUB_WORKSPACE%
+          call "%DDKROOT%\bin\setenv.bat" %DDKROOT% fre x64 WIN7 no_oacr
+          cd /d "%SRCDIR%"
+          build -ceZ
+
+      - name: Collect built SYS files (by NT version)
+        shell: pwsh
+        run: |
+          $root = $env:GITHUB_WORKSPACE
+
+          $map = @(
+            @{ name = "xp_x86";       obj = "objfre_WXP_x86";      ver = "5.1_x86" }
+            @{ name = "xp_x64";       obj = "objfre_WNET_amd64";   ver = "5.2_x64" }
+            @{ name = "srv2003_x86";  obj = "objfre_WNET_x86";     ver = "5.2_x86" }
+            @{ name = "vista_x86";    obj = "objfre_WLH_x86";      ver = "6.0_x86" }
+            @{ name = "vista_x64";    obj = "objfre_WLH_amd64";    ver = "6.0_x64" }
+            @{ name = "win7_x86";     obj = "objfre_WIN7_x86";     ver = "6.1_x86" }
+            @{ name = "win7_x64";     obj = "objfre_WIN7_amd64";   ver = "6.1_x64" }
+          )
+
+          $out = Join-Path $env:RUNNER_TEMP "out"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          foreach ($cfg in $map) {
+            $name       = $cfg.name
+            $objDirName = $cfg.obj
+            $verFolder  = $cfg.ver
+
+            $ntos = Get-ChildItem -Path $root -Recurse -Filter "ntoskrn8.sys" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.FullName -like "*\$objDirName\*" } |
+                    Select-Object -First 1
+
+            $stor = Get-ChildItem -Path $root -Recurse -Filter "storpor8.sys" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.FullName -like "*\$objDirName\*" } |
+                    Select-Object -First 1
+
+            $kern = Get-ChildItem -Path $root -Recurse -Filter "kernel8.dll" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.FullName -like "*\$objDirName\*" } |
+                    Select-Object -First 1
+
+            if (-not $ntos -and -not $stor -and -not $kern) {
+              Write-Warning "No files found in obj dir $objDirName, skipping $name"
+              continue
+            }
+
+            $destDir = Join-Path $out $verFolder
+            New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+
+            if ($ntos) {
+              Copy-Item $ntos.FullName (Join-Path $destDir "ntoskrn8.sys") -Force
+            }
+            if ($stor) {
+              Copy-Item $stor.FullName (Join-Path $destDir "storpor8.sys") -Force
+            }
+            if ($kern) {
+              Copy-Item $kern.FullName (Join-Path $destDir "kernel8.dll") -Force
+            }
+
+            Write-Host "Collected $name -> $verFolder"
+          }
+
+          "OUT_DIR=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ascii
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ntoskrn8-multi-target
+          path: ${{ env.OUT_DIR }}
